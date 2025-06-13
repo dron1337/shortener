@@ -1,3 +1,15 @@
 package main
 
-func main() {}
+import (
+	"log"
+
+	"github.com/dron1337/shortener/internal/app"
+)
+
+func main() {
+	logger := log.New(log.Writer(), "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+	server := app.NewServer(logger)
+	if err := server.Start(); err != nil {
+		server.Logger.Fatalf("Error starting server: %s", err)
+	}
+}
