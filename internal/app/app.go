@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dron1337/shortener/internal/config"
 	"github.com/dron1337/shortener/internal/store"
 )
 
@@ -55,9 +56,9 @@ func (s *Server) Stop() error {
 	s.Logger.Println("Server stopped gracefully")
 	return nil
 }
-func NewServer(logger *log.Logger) *Server {
+func NewServer(cfg *config.Config, logger *log.Logger) *Server {
 	store := store.New()
-	r := NewRouter(store)
+	r := NewRouter(cfg, store)
 
 	s := &http.Server{
 		Addr:         ":8080",

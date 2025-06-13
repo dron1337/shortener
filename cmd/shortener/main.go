@@ -2,14 +2,22 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/dron1337/shortener/internal/app"
+	"github.com/dron1337/shortener/internal/config"
 )
 
 func main() {
-	logger := log.New(log.Writer(), "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
-	server := app.NewServer(logger)
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal("Failed to load config:", err)
+	}
+
+	logger := log.New(os.Stdout, "SERVER: ", log.LstdFlags)
+	server := app.NewServer(cfg, logger)
+
 	if err := server.Start(); err != nil {
-		server.Logger.Fatalf("Error starting server: %s", err)
+		logger.Fatal(err)
 	}
 }

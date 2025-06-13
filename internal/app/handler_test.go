@@ -1,12 +1,15 @@
 package app
 
 import (
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/dron1337/shortener/internal/config"
 	"github.com/dron1337/shortener/internal/store"
+	"github.com/gorilla/mux"
 )
 
 func TestPostShortenURL(t *testing.T) {
@@ -152,16 +155,27 @@ func TestInvalidRequests(t *testing.T) {
 	}
 }
 func setupServer() http.Handler {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal("Failed to load config:", err)
+	}
 	store := store.New()
-	urlHandler := NewURLHandler(store)
+	handler := NewURLHandler(store)
+	r := mux.NewRouter()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /", urlHandler.GenerateURL)
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusBadRequest)
-	})
-	mux.HandleFunc("GET /{key}", urlHandler.GetURL)
+	// Регистрируем пути из конфига
+	r.HandleFunc(cfg.Paths.GetURL, handler.GetURL).Methods("GET")
+	r.HandleFunc(cfg.Paths.CreateURL, handler.GenerateURL).Methods("POST")
 
-	return mux
+	// Обработчик для некорректных GET запросов на корень
+	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		http.NotFound(w, r)
+	}).Methods("GET")
+
+	return r
 }
