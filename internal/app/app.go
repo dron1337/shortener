@@ -57,14 +57,11 @@ func (s *Server) Stop() error {
 }
 func NewServer(logger *log.Logger) *Server {
 	store := store.New()
-	handler := NewURLHandler(store)
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{key}", handler.GetURL)
-	mux.HandleFunc("POST /", handler.GenerateURL)
+	r := NewRouter(store)
 
 	s := &http.Server{
 		Addr:         ":8080",
-		Handler:      mux,
+		Handler:      r,
 		ErrorLog:     logger,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,

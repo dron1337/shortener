@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dron1337/shortener/internal/store"
+	"github.com/gorilla/mux"
 )
 
 type URLHandler struct {
@@ -47,12 +48,8 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 }
 func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Request: %s %s", r.Method, r.URL.Path)
-	if r.URL.Path == "/" {
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	key := r.URL.Path[1:]
+	vars := mux.Vars(r)
+	key := vars["key"]
 	if key == "" {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusBadRequest)
@@ -62,6 +59,7 @@ func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 	url, ok := h.store.Get(key)
 	log.Printf("Url: %s exists %t", key, ok)
 	if !ok {
+		log.Printf("Key not found: %s", key)
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusBadRequest)
 		return
