@@ -30,16 +30,13 @@ func LoadConfig() (*Config, error) {
 		cfg.ServerAddress = envAddr
 	} else {
 		flag.StringVar(&cfg.ServerAddress, "a", cfg.ServerAddress, "HTTP server address")
-		flag.Parse()
-
 	}
 	if envBase := os.Getenv("BASE_URL"); envBase != "" {
 		cfg.BaseURL = envBase
 	} else {
 		flag.StringVar(&cfg.BaseURL, "b", cfg.BaseURL, "Base URL for shortened URLs")
-		flag.Parse()
-
 	}
+	flag.Parse()
 	// Валидация
 	if _, err := url.ParseRequestURI(cfg.BaseURL); err != nil {
 		return nil, fmt.Errorf("invalid base URL: %w", err)
