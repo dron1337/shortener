@@ -28,6 +28,7 @@ func LoadConfig() (*Config, error) {
 	if err != nil {
 		log.Fatal("Error loading .env file:", err)
 	}
+
 	if *flagAddr != "" {
 		cfg.ServerAddress = *flagAddr
 	} else if envAddr := os.Getenv("SERVER_ADDRESS"); envAddr != "" {
