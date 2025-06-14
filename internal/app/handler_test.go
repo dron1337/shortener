@@ -51,6 +51,7 @@ func TestPostShortenURL(t *testing.T) {
 	}
 }
 
+
 func TestGetRedirectURL(t *testing.T) {
 	cfg := &config.Config{
 		ServerAddress: "localhost:8080",
