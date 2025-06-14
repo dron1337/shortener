@@ -1,7 +1,6 @@
 package app
 
 import (
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,21 +12,23 @@ import (
 )
 
 func TestPostShortenURL(t *testing.T) {
-	// Инициализируем роутер или хендлер
-	handler := setupServer()
+	// Настраиваем тестовую конфигурацию
+	cfg := &config.Config{
+		ServerAddress: "localhost:8080",
+		BaseURL:       "http://test.example",
+	}
+
+	handler := setupServerWithConfig(cfg)
+	testURL := "https://practicum.yandex.ru/"
 
 	// Создаем тестовый запрос
-	body := strings.NewReader("https://practicum.yandex.ru/")
-	req, err := http.NewRequest("POST", "/", body)
+	req, err := http.NewRequest("POST", "/", strings.NewReader(testURL))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "text/plain")
 
-	// Создаем ResponseRecorder для записи ответа
 	rr := httptest.NewRecorder()
-
-	// Вызываем хендлер напрямую
 	handler.ServeHTTP(rr, req)
 
 	// Проверяем статус код
@@ -37,62 +38,59 @@ func TestPostShortenURL(t *testing.T) {
 	}
 
 	// Проверяем Content-Type
-	expectedContentType := "text/plain"
-	if contentType := rr.Header().Get("Content-Type"); contentType != expectedContentType {
+	if contentType := rr.Header().Get("Content-Type"); contentType != "text/plain" {
 		t.Errorf("handler returned wrong content type: got %v want %v",
-			contentType, expectedContentType)
+			contentType, "text/plain")
 	}
 
-	// Проверяем что вернулся сокращенный URL
+	// Проверяем что вернулся сокращенный URL с правильным базовым адресом
 	shortURL := rr.Body.String()
-	if !strings.HasPrefix(shortURL, "http://localhost:8080/") {
-		t.Errorf("handler returned unexpected body: got %v, should start with http://localhost:8080/",
-			shortURL)
+	if !strings.HasPrefix(shortURL, cfg.BaseURL+"/") {
+		t.Errorf("handler returned unexpected body: got %v, should start with %v/",
+			shortURL, cfg.BaseURL)
 	}
 }
 
 func TestGetRedirectURL(t *testing.T) {
-	// Инициализируем роутер или хендлер
-	handler := setupServer()
+	cfg := &config.Config{
+		ServerAddress: "localhost:8080",
+		BaseURL:       "http://test.example",
+	}
+	handler := setupServerWithConfig(cfg)
+	testURL := "https://practicum.yandex.ru/"
 
 	// Сначала создаем сокращенную ссылку
-	body := strings.NewReader("https://practicum.yandex.ru/")
-	reqPost, err := http.NewRequest("POST", "/", body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reqPost.Header.Set("Content-Type", "text/plain")
-
 	rrPost := httptest.NewRecorder()
+	reqPost, _ := http.NewRequest("POST", "/", strings.NewReader(testURL))
+	reqPost.Header.Set("Content-Type", "text/plain")
 	handler.ServeHTTP(rrPost, reqPost)
+
 	shortURL := rrPost.Body.String()
-	shortID := strings.TrimPrefix(shortURL, "http://localhost:8080/")
+	shortID := strings.TrimPrefix(shortURL, cfg.BaseURL+"/")
 
 	// Теперь тестируем редирект
-	reqGet, err := http.NewRequest("GET", "/"+shortID, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	reqGet, _ := http.NewRequest("GET", "/"+shortID, nil)
 	rrGet := httptest.NewRecorder()
 	handler.ServeHTTP(rrGet, reqGet)
 
-	// Проверяем статус код
+	// Проверки
 	if status := rrGet.Code; status != http.StatusTemporaryRedirect {
 		t.Errorf("handler returned wrong status code: got %v want %v",
 			status, http.StatusTemporaryRedirect)
 	}
 
-	// Проверяем Location header
-	expectedLocation := "https://practicum.yandex.ru/"
-	if location := rrGet.Header().Get("Location"); location != expectedLocation {
+	if location := rrGet.Header().Get("Location"); location != testURL {
 		t.Errorf("handler returned wrong Location header: got %v want %v",
-			location, expectedLocation)
+			location, testURL)
 	}
 }
 
 func TestInvalidRequests(t *testing.T) {
-	handler := setupServer()
+	cfg := &config.Config{
+		ServerAddress: "localhost:8080",
+		BaseURL:       "http://test.example",
+	}
+	handler := setupServerWithConfig(cfg)
 
 	tests := []struct {
 		name        string
@@ -107,6 +105,14 @@ func TestInvalidRequests(t *testing.T) {
 			method:     "GET",
 			path:       "/",
 			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:        "Empty body",
+			method:      "POST",
+			path:        "/",
+			body:        "",
+			contentType: "text/plain",
+			wantStatus:  http.StatusBadRequest,
 		},
 		{
 			name:        "Invalid URL",
@@ -126,55 +132,35 @@ func TestInvalidRequests(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var body *strings.Reader
-			if tt.body != "" {
-				body = strings.NewReader(tt.body)
-			} else {
-				body = strings.NewReader("")
-			}
-
-			req, err := http.NewRequest(tt.method, tt.path, body)
-			if err != nil {
-				t.Fatal(err)
-			}
-
+			req, _ := http.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
 			if tt.contentType != "" {
 				req.Header.Set("Content-Type", tt.contentType)
 			}
 
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
-			t.Logf("Request: %s %s", tt.method, tt.path)
-			t.Logf("Response status: %d", rr.Code)
-			t.Logf("Response headers: %v", rr.Header())
+
 			if status := rr.Code; status != tt.wantStatus {
-				t.Errorf("handler returned wrong status code: got %v want %v",
-					status, tt.wantStatus)
+				t.Errorf("%s: handler returned wrong status code: got %v want %v",
+					tt.name, status, tt.wantStatus)
 			}
 		})
 	}
 }
-func setupServer() http.Handler {
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatal("Failed to load config:", err)
-	}
+
+func setupServerWithConfig(cfg *config.Config) http.Handler {
 	store := store.New()
-	handler := NewURLHandler(store)
 	r := mux.NewRouter()
+	handler := NewURLHandler(store, cfg)
 
-	// Регистрируем пути из конфига
-	r.HandleFunc(cfg.Paths.GetURL, handler.GetURL).Methods("GET")
-	r.HandleFunc(cfg.Paths.CreateURL, handler.GenerateURL).Methods("POST")
+	r.HandleFunc("/{key}", handler.GetURL).Methods("GET")
+	r.HandleFunc("/", handler.GenerateURL).Methods("POST")
 
-	// Обработчик для некорректных GET запросов на корень
+	// Явная обработка GET / для возврата 400
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
-			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusBadRequest)
-			return
 		}
-		http.NotFound(w, r)
 	}).Methods("GET")
 
 	return r

@@ -8,16 +8,18 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/dron1337/shortener/internal/config"
 	"github.com/dron1337/shortener/internal/store"
 	"github.com/gorilla/mux"
 )
 
 type URLHandler struct {
-	store *store.URLStorage
+	store  *store.URLStorage
+	config *config.Config
 }
 
-func NewURLHandler(store *store.URLStorage) *URLHandler {
-	return &URLHandler{store: store}
+func NewURLHandler(store *store.URLStorage, cfg *config.Config) *URLHandler {
+	return &URLHandler{store: store, config: cfg}
 }
 func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Request: %s %s", r.Method, r.URL.Path)
@@ -41,11 +43,12 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	shortURL := h.store.Save(originalURL)
-	log.Printf("Short URL: %s", shortURL)
+	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
+	log.Printf("Short URL: %s", fullShortURL)
 	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Content-Length", fmt.Sprint(len(shortURL)))
+	w.Header().Set("Content-Length", fmt.Sprint(len(fullShortURL)))
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(shortURL))
+	w.Write([]byte(fullShortURL))
 }
 func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Request: %s %s", r.Method, r.URL.Path)

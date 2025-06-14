@@ -6,14 +6,13 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func NewRouter(cfg *config.Config, store *store.URLStorage) *mux.Router {
-	urlHandler := NewURLHandler(store)
+func NewRouter(cfg *config.Config) *mux.Router {
+	store := store.New()
+	r := mux.NewRouter()
+	handler := NewURLHandler(store, cfg)
 
-	router := mux.NewRouter()
+	r.HandleFunc("/{key}", handler.GetURL).Methods("GET")
+	r.HandleFunc("/", handler.GenerateURL).Methods("POST")
 
-	router.HandleFunc(cfg.Paths.CreateURL, urlHandler.GenerateURL).Methods("POST")
-	router.HandleFunc(cfg.Paths.GetURL, urlHandler.GetURL).Methods("GET")
-
-	return router
-
+	return r
 }

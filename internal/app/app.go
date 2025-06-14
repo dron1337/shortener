@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/dron1337/shortener/internal/config"
-	"github.com/dron1337/shortener/internal/store"
 )
 
 type Server struct {
 	Logger     *log.Logger
 	HTTPServer *http.Server
+	Config     *config.Config
 }
 
 func (s *Server) Start() error {
@@ -56,13 +56,12 @@ func (s *Server) Stop() error {
 	s.Logger.Println("Server stopped gracefully")
 	return nil
 }
-func NewServer(cfg *config.Config, logger *log.Logger) *Server {
-	store := store.New()
-	r := NewRouter(cfg, store)
 
+func NewServer(logger *log.Logger, cfg *config.Config) *Server {
+	mux := NewRouter(cfg)
 	s := &http.Server{
-		Addr:         ":8080",
-		Handler:      r,
+		Addr:         cfg.ServerAddress,
+		Handler:      mux,
 		ErrorLog:     logger,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -72,6 +71,6 @@ func NewServer(cfg *config.Config, logger *log.Logger) *Server {
 	return &Server{
 		Logger:     logger,
 		HTTPServer: s,
+		Config:     cfg,
 	}
-
 }

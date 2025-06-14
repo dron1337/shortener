@@ -1,7 +1,6 @@
 package store
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -21,7 +20,8 @@ func (s *URLStorage) Save(originalURL string) string {
 	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
 	shortKey := service.GenerateShortKey(rand)
 	s.data[shortKey] = originalURL
-	return fmt.Sprintf("http://localhost:8080/%s", shortKey)
+	return shortKey
+
 }
 
 func (s *URLStorage) Get(shortKey string) (string, bool) {
