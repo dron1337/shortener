@@ -26,7 +26,7 @@ func LoadConfig() (*Config, error) {
 	flag.Parse()
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file:", err)
+		log.Printf("Error loading .env file:", err)
 	}
 
 	if *flagAddr != "" {
