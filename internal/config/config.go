@@ -21,22 +21,24 @@ func LoadConfig() (*Config, error) {
 		ServerAddress: "localhost:8080",
 		BaseURL:       "http://localhost:8080",
 	}
+	flagAddr := flag.String("a", "", "HTTP server address")
+	flagBase := flag.String("b", "", "Base URL for shortened URLs")
+	flag.Parse()
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file:", err)
 	}
-	// Переопределение из env-переменных
-	if envAddr := os.Getenv("SERVER_ADDRESS"); envAddr != "" {
+	if *flagAddr != "" {
+		cfg.ServerAddress = *flagAddr
+	} else if envAddr := os.Getenv("SERVER_ADDRESS"); envAddr != "" {
 		cfg.ServerAddress = envAddr
-	} else {
-		flag.StringVar(&cfg.ServerAddress, "a", cfg.ServerAddress, "HTTP server address")
 	}
-	if envBase := os.Getenv("BASE_URL"); envBase != "" {
+
+	if *flagBase != "" {
+		cfg.BaseURL = *flagBase
+	} else if envBase := os.Getenv("BASE_URL"); envBase != "" {
 		cfg.BaseURL = envBase
-	} else {
-		flag.StringVar(&cfg.BaseURL, "b", cfg.BaseURL, "Base URL for shortened URLs")
 	}
-	flag.Parse()
 	// Валидация
 	if _, err := url.ParseRequestURI(cfg.BaseURL); err != nil {
 		return nil, fmt.Errorf("invalid base URL: %w", err)
