@@ -3,7 +3,11 @@ package config
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net/url"
+	"os"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -12,20 +16,33 @@ type Config struct {
 }
 
 func LoadConfig() (*Config, error) {
-	var serverAddress string
-	var baseURL string
-
-	flag.StringVar(&serverAddress, "a", "localhost:8080", "HTTP server address")
-	flag.StringVar(&baseURL, "b", "http://localhost:8080", "Base URL for shortened URLs")
+	// Значения по умолчанию
+	cfg := Config{
+		ServerAddress: "localhost:8080",
+		BaseURL:       "http://localhost:8080",
+	}
+	flagAddr := flag.String("a", "", "HTTP server address")
+	flagBase := flag.String("b", "", "Base URL for shortened URLs")
 	flag.Parse()
-
-	_, err := url.ParseRequestURI(baseURL)
+	err := godotenv.Load()
 	if err != nil {
-		return nil, fmt.Errorf("invalid base URL: %w", err)
+		log.Printf("Error loading .env file: %v", err)
 	}
 
-	return &Config{
-		ServerAddress: serverAddress,
-		BaseURL:       baseURL,
-	}, nil
+	if *flagAddr != "" {
+		cfg.ServerAddress = *flagAddr
+	} else if envAddr := os.Getenv("SERVER_ADDRESS"); envAddr != "" {
+		cfg.ServerAddress = envAddr
+	}
+
+	if *flagBase != "" {
+		cfg.BaseURL = *flagBase
+	} else if envBase := os.Getenv("BASE_URL"); envBase != "" {
+		cfg.BaseURL = envBase
+	}
+	// Валидация
+	if _, err := url.ParseRequestURI(cfg.BaseURL); err != nil {
+		return nil, fmt.Errorf("invalid base URL: %w", err)
+	}
+	return &cfg, nil
 }

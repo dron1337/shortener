@@ -59,6 +59,7 @@ func (s *Server) Stop() error {
 
 func NewServer(logger *log.Logger, cfg *config.Config) *Server {
 	mux := NewRouter(cfg)
+
 	s := &http.Server{
 		Addr:         cfg.ServerAddress,
 		Handler:      mux,
