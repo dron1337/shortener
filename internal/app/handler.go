@@ -56,7 +56,7 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(fullShortURL))
 }
-func (h *URLHandler) GenerateJsonURL(w http.ResponseWriter, r *http.Request) {
+func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")

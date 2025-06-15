@@ -156,7 +156,7 @@ func setupServerWithConfig(cfg *config.Config) http.Handler {
 
 	r.HandleFunc("/{key}", handler.GetURL).Methods("GET")
 	r.HandleFunc("/", handler.GenerateURL).Methods("POST")
-	r.HandleFunc("/api/shorten", handler.GenerateJsonURL).Methods("POST")
+	r.HandleFunc("/api/shorten", handler.GenerateJSONURL).Methods("POST")
 
 	// Явная обработка GET / для возврата 400
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +167,7 @@ func setupServerWithConfig(cfg *config.Config) http.Handler {
 
 	return r
 }
-func TestGenerateJsonURL(t *testing.T) {
+func TestGenerateJSONURL(t *testing.T) {
 	cfg := &config.Config{
 		ServerAddress: "localhost:8888",
 		BaseURL:       "http://test.example",

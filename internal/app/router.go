@@ -19,7 +19,7 @@ func NewRouter(cfg *config.Config) *mux.Router {
 
 	r.HandleFunc("/{key}", handler.GetURL).Methods("GET")
 	r.HandleFunc("/", handler.GenerateURL).Methods("POST")
-	r.HandleFunc("/api/shorten", handler.GenerateJsonURL).Methods("POST")
+	r.HandleFunc("/api/shorten", handler.GenerateJSONURL).Methods("POST")
 
 	return r
 }
