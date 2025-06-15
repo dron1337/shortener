@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -50,7 +51,6 @@ func TestPostShortenURL(t *testing.T) {
 			shortURL, cfg.BaseURL)
 	}
 }
-
 
 func TestGetRedirectURL(t *testing.T) {
 	cfg := &config.Config{
@@ -156,6 +156,7 @@ func setupServerWithConfig(cfg *config.Config) http.Handler {
 
 	r.HandleFunc("/{key}", handler.GetURL).Methods("GET")
 	r.HandleFunc("/", handler.GenerateURL).Methods("POST")
+	r.HandleFunc("/api/shorten", handler.GenerateJsonURL).Methods("POST")
 
 	// Явная обработка GET / для возврата 400
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -165,4 +166,80 @@ func setupServerWithConfig(cfg *config.Config) http.Handler {
 	}).Methods("GET")
 
 	return r
+}
+func TestGenerateJsonURL(t *testing.T) {
+	cfg := &config.Config{
+		ServerAddress: "localhost:8888",
+		BaseURL:       "http://test.example",
+	}
+	handler := setupServerWithConfig(cfg)
+
+	tests := []struct {
+		name           string
+		requestBody    string
+		contentType    string
+		expectedStatus int
+		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name:           "Valid JSON request",
+			requestBody:    `{"url":"https://practicum.yandex.ru/"}`,
+			contentType:    "application/json",
+			expectedStatus: http.StatusCreated,
+			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				if contentType := rr.Header().Get("Content-Type"); contentType != "application/json" {
+					t.Errorf("expected content type application/json, got %s", contentType)
+				}
+
+				var resp ResponseData
+				if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("failed to unmarshal response: %v", err)
+				}
+
+				if !strings.HasPrefix(resp.Result, cfg.BaseURL+"/") {
+					t.Errorf("expected result to start with %s/, got %s", cfg.BaseURL, resp.Result)
+				}
+			},
+		},
+		{
+			name:           "Empty URL",
+			requestBody:    `{"url":""}`,
+			contentType:    "application/json",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Invalid JSON",
+			requestBody:    `{"url":"https://practicum.yandex.ru/"`,
+			contentType:    "application/json",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Missing URL field",
+			requestBody:    `{"not_url":"https://practicum.yandex.ru/"}`,
+			contentType:    "application/json",
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequest("POST", "/api/shorten", strings.NewReader(tt.requestBody))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Content-Type", tt.contentType)
+
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+
+			if status := rr.Code; status != tt.expectedStatus {
+				t.Errorf("handler returned wrong status code: got %v want %v",
+					status, tt.expectedStatus)
+			}
+
+			if tt.checkResponse != nil {
+				tt.checkResponse(t, rr)
+			}
+		})
+	}
 }
