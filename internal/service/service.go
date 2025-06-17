@@ -3,6 +3,7 @@ package service
 import (
 	"compress/gzip"
 	"io"
+	"log"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -36,7 +37,7 @@ func GzipHandle(next http.Handler) http.Handler {
 		// это упрощённый пример. В реальном приложении следует проверять все
 		// значения r.Header.Values("Accept-Encoding") и разбирать строку
 		// на составные части, чтобы избежать неожиданных результатов
-		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && (strings.Contains(r.Header.Get("Content-Type"), "application/json") || strings.Contains(r.Header.Get("Content-Type"), "text/html")) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && !(strings.Contains(r.Header.Get("Content-Type"), "application/json") || strings.Contains(r.Header.Get("Content-Type"), "text/html")) {
 			// если gzip не поддерживается, передаём управление
 			// дальше без изменений
 			next.ServeHTTP(w, r)
@@ -47,10 +48,11 @@ func GzipHandle(next http.Handler) http.Handler {
 		gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
 		if err != nil {
 			io.WriteString(w, err.Error())
+			log.Println("Error NewWriterLevel", err)
 			return
 		}
 		defer gz.Close()
-
+		log.Printf("Set Content-Encoding")
 		w.Header().Set("Content-Encoding", "gzip")
 		// передаём обработчику страницы переменную типа gzipWriter для вывода данных
 		next.ServeHTTP(gzipWriter{ResponseWriter: w, Writer: gz}, r)
