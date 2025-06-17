@@ -3,7 +3,6 @@ package service
 import (
 	"compress/gzip"
 	"io"
-	"log"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -33,14 +32,6 @@ func (w gzipWriter) Write(b []byte) (int, error) {
 }
 func GzipHandle(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		contentTypes := []string{
-			"application/javascript",
-			"application/json",
-			"text/css",
-			"text/html",
-			//"text/plain",
-			"text/xml",
-		}
 		if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
 			gz, err := gzip.NewReader(r.Body)
 			if err != nil {
@@ -50,36 +41,28 @@ func GzipHandle(next http.Handler) http.Handler {
 			defer gz.Close()
 			r.Body = gz
 		}
-		log.Println("Content-Type =", r.Header.Get("Content-Type"))
-		log.Println("Accept-Encoding =", r.Header.Get("Accept-Encoding"))
-		if !containsContentType(r.Header.Get("Content-Type"), contentTypes) {
-			log.Println("next.ServeHTT")
+		acceptsGzip := strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
+		if !acceptsGzip {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-			log.Println("next.ServeHTT")
-			next.ServeHTTP(w, r)
-			return
-		}
-		gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
-		if err != nil {
-			io.WriteString(w, err.Error())
-			log.Println("Error NewWriterLevel", err)
-			return
-		}
-		defer gz.Close()
-		log.Printf("Set Content-Encoding")
+		gzWriter := gzip.NewWriter(w)
+		defer gzWriter.Close()
 		w.Header().Set("Content-Encoding", "gzip")
-		next.ServeHTTP(gzipWriter{ResponseWriter: w, Writer: gz}, r)
+		gzw := gzipWriter{
+			ResponseWriter: w,
+			Writer:         gzWriter,
+		}
+		next.ServeHTTP(gzw, r)
 	})
+
 }
 
-func containsContentType(contentType string, types []string) bool {
-	for _, t := range types {
-		if strings.Contains(contentType, t) {
-			return true
-		}
-	}
-	return false
-}
+// func containsContentType(contentType string, types []string) bool {
+// 	for _, t := range types {
+// 		if strings.Contains(contentType, t) {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }

@@ -53,7 +53,7 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
 	log.Printf("Short URL: %s", fullShortURL)
 	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Content-Length", fmt.Sprint(len(fullShortURL)))
+	//w.Header().Set("Content-Length", fmt.Sprint(len(fullShortURL)))
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(fullShortURL))
 }
@@ -97,7 +97,7 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
 	//w.Header().Set("Content-Length", fmt.Sprint(len(fullShortURL)))
-	w.Header().Set("Content-Length", fmt.Sprint(len(jsonBytes)))
+	//w.Header().Set("Content-Length", fmt.Sprint(len(jsonBytes)))
 	w.WriteHeader(http.StatusCreated)
 	log.Printf("Sending response: %s", jsonBytes)
 	w.Write(jsonBytes)

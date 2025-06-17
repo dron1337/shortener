@@ -14,8 +14,9 @@ func NewRouter(cfg *config.Config) *mux.Router {
 	if err := logger.Initialize("info"); err != nil {
 		panic(err)
 	}
-	r.Use(service.GzipHandle)
+
 	r.Use(logger.LoggingMiddleware)
+	r.Use(service.GzipHandle)
 	handler := NewURLHandler(store, cfg)
 
 	r.HandleFunc("/{key}", handler.GetURL).Methods("GET")
