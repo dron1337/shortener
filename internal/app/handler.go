@@ -29,6 +29,7 @@ func NewURLHandler(store *store.URLStorage, cfg *config.Config) *URLHandler {
 	return &URLHandler{store: store, config: cfg}
 }
 func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Incoming request: %s %s, Headers: %v", r.Method, r.URL, r.Header)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.Header().Set("Content-Type", "text/plain")
