@@ -33,14 +33,19 @@ func (w gzipWriter) Write(b []byte) (int, error) {
 }
 func GzipHandle(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && !(strings.Contains(r.Header.Get("Content-Type"), "application/json") || strings.Contains(r.Header.Get("Content-Type"), "text/html")) {
-			// если gzip не поддерживается, передаём управление
-			// дальше без изменений
+		contentTypes := []string{
+			"application/javascript",
+			"application/json",
+			"text/css",
+			"text/html",
+			"text/plain",
+			"text/xml",
+		}
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && !containsContentType(r.Header.Get("Content-Type"), contentTypes) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		// создаём gzip.Writer поверх текущего w
 		gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
 		if err != nil {
 			io.WriteString(w, err.Error())
@@ -50,7 +55,15 @@ func GzipHandle(next http.Handler) http.Handler {
 		defer gz.Close()
 		log.Printf("Set Content-Encoding")
 		w.Header().Set("Content-Encoding", "gzip")
-		// передаём обработчику страницы переменную типа gzipWriter для вывода данных
 		next.ServeHTTP(gzipWriter{ResponseWriter: w, Writer: gz}, r)
 	})
+}
+
+func containsContentType(contentType string, types []string) bool {
+	for _, t := range types {
+		if strings.Contains(contentType, t) {
+			return true
+		}
+	}
+	return false
 }
