@@ -41,7 +41,15 @@ func GzipHandle(next http.Handler) http.Handler {
 			//"text/plain",
 			"text/xml",
 		}
-		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && !containsContentType(r.Header.Get("Content-Type"), contentTypes) {
+		log.Println(r.Header.Get("Content-Type"))
+		if !containsContentType(r.Header.Get("Content-Type"), contentTypes) {
+			log.Println("next.ServeHTT")
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			log.Println("next.ServeHTT")
 			next.ServeHTTP(w, r)
 			return
 		}
