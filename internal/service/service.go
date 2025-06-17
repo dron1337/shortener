@@ -37,6 +37,15 @@ func GzipHandle(next http.Handler) http.Handler {
 		// это упрощённый пример. В реальном приложении следует проверять все
 		// значения r.Header.Values("Accept-Encoding") и разбирать строку
 		// на составные части, чтобы избежать неожиданных результатов
+		if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
+			gz, err := gzip.NewReader(r.Body)
+			if err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			defer gz.Close()
+			r.Body = gz
+		}
 		acceptsGzip := strings.Contains(r.Header.Get("Accept-Encoding"), "gzip")
 		if !acceptsGzip {
 			next.ServeHTTP(w, r)
