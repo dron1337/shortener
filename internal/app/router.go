@@ -3,7 +3,7 @@ package app
 import (
 	"github.com/dron1337/shortener/internal/config"
 	"github.com/dron1337/shortener/internal/logger"
-
+	"github.com/dron1337/shortener/internal/service"
 	"github.com/dron1337/shortener/internal/store"
 	"github.com/gorilla/mux"
 )
@@ -15,6 +15,7 @@ func NewRouter(cfg *config.Config) *mux.Router {
 		panic(err)
 	}
 	r.Use(logger.LoggingMiddleware)
+	r.Use(service.GzipHandle)
 	handler := NewURLHandler(store, cfg)
 
 	r.HandleFunc("/{key}", handler.GetURL).Methods("GET")
