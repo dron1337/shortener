@@ -47,13 +47,11 @@ func GzipHandle(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-
 		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 			log.Println("next.ServeHTT")
 			next.ServeHTTP(w, r)
 			return
 		}
-
 		gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
 		if err != nil {
 			io.WriteString(w, err.Error())
