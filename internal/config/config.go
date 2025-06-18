@@ -13,6 +13,7 @@ import (
 type Config struct {
 	ServerAddress string
 	BaseURL       string
+	FileName      string
 }
 
 func LoadConfig() (*Config, error) {
@@ -20,9 +21,11 @@ func LoadConfig() (*Config, error) {
 	cfg := Config{
 		ServerAddress: "localhost:8080",
 		BaseURL:       "http://localhost:8080",
+		FileName:      "tmp/short-url-db.json",
 	}
 	flagAddr := flag.String("a", "", "HTTP server address")
 	flagBase := flag.String("b", "", "Base URL for shortened URLs")
+	flagFileName := flag.String("f", "", "File name")
 	flag.Parse()
 	err := godotenv.Load()
 	if err != nil {
@@ -40,6 +43,12 @@ func LoadConfig() (*Config, error) {
 	} else if envBase := os.Getenv("BASE_URL"); envBase != "" {
 		cfg.BaseURL = envBase
 	}
+	if *flagFileName != "" {
+		cfg.FileName = *flagFileName
+	} else {
+		cfg.FileName = os.Getenv("FILE_STORAGE_PATH")
+	}
+	log.Println("File Name = ",cfg.FileName)
 	// Валидация
 	if _, err := url.ParseRequestURI(cfg.BaseURL); err != nil {
 		return nil, fmt.Errorf("invalid base URL: %w", err)
