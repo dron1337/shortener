@@ -60,7 +60,6 @@ func SaveInFile(s Storage, fileName string) {
 		return
 	}
 	data = append(data, '\n')
-
 	_, _ = file.Write(data)
 }
 func (s *URLStorage) Get(shortKey string) (string, bool) {
