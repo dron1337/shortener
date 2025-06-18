@@ -49,11 +49,12 @@ func (s *URLStorage) Save(originalURL string, fileName string) string {
 
 }
 func SaveInFile(s Storage, fileName string) {
+	fileName = filepath.FromSlash(fileName)
 	if err := os.MkdirAll(filepath.Dir(fileName), 0755); err != nil {
 		log.Printf("Failed to create directory: %v", err)
 		return
 	}
-	file, err := os.OpenFile("."+fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Printf("SaveInFile: failed to open file %s: %v", fileName, err)
 		return
@@ -73,7 +74,13 @@ func SaveInFile(s Storage, fileName string) {
 		log.Printf("File stat error: %v", err)
 	}
 	data = append(data, '\n')
-	_, _ = file.Write(data)
+	if _, err := file.Write(data); err != nil {
+		log.Printf("SaveInFile: write error: %v", err)
+		return
+	}
+	if err := file.Sync(); err != nil {
+		log.Printf("SaveInFile: sync error: %v", err)
+	}
 }
 func (s *URLStorage) Get(shortKey string) (string, bool) {
 	url, exists := s.data[shortKey]
