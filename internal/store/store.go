@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/dron1337/shortener/internal/service"
@@ -48,6 +49,10 @@ func (s *URLStorage) Save(originalURL string, fileName string) string {
 
 }
 func SaveInFile(s Storage, fileName string) {
+	if err := os.MkdirAll(filepath.Dir(fileName), 0755); err != nil {
+		log.Printf("Failed to create directory: %v", err)
+		return
+	}
 	file, err := os.OpenFile("."+fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Printf("SaveInFile: failed to open file %s: %v", fileName, err)
@@ -58,6 +63,14 @@ func SaveInFile(s Storage, fileName string) {
 	if err != nil {
 		log.Printf("SaveInFile: json marshal error: %v", err)
 		return
+	}
+	log.Printf("Trying to save to file: %s", fileName)
+	if _, err := os.Stat(fileName); err == nil {
+		log.Printf("File already exists")
+	} else if os.IsNotExist(err) {
+		log.Printf("File does not exist")
+	} else {
+		log.Printf("File stat error: %v", err)
 	}
 	data = append(data, '\n')
 	_, _ = file.Write(data)
