@@ -48,7 +48,7 @@ func (s *URLStorage) Save(originalURL string, fileName string) string {
 
 }
 func SaveInFile(s Storage, fileName string) {
-	file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	file, err := os.OpenFile("."+fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Printf("SaveInFile: failed to open file %s: %v", fileName, err)
 		return

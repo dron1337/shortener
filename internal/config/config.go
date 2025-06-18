@@ -48,6 +48,7 @@ func LoadConfig() (*Config, error) {
 	} else {
 		cfg.FileName = os.Getenv("FILE_STORAGE_PATH ")
 	}
+	log.Println("File Name = ",cfg.FileName)
 	// Валидация
 	if _, err := url.ParseRequestURI(cfg.BaseURL); err != nil {
 		return nil, fmt.Errorf("invalid base URL: %w", err)
