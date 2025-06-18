@@ -49,7 +49,7 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortURL := h.store.Save(originalURL)
+	shortURL := h.store.Save(originalURL,h.config.FileName)
 	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
 	log.Printf("Short URL: %s", fullShortURL)
 	w.Header().Set("Content-Type", "text/plain")
@@ -84,7 +84,7 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortURL := h.store.Save(data.URL)
+	shortURL := h.store.Save(data.URL, h.config.FileName)
 	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
 	response := ResponseData{Result: fullShortURL}
 	jsonBytes, err := json.Marshal(response)

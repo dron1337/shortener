@@ -57,12 +57,3 @@ func GzipHandle(next http.Handler) http.Handler {
 	})
 
 }
-
-// func containsContentType(contentType string, types []string) bool {
-// 	for _, t := range types {
-// 		if strings.Contains(contentType, t) {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
