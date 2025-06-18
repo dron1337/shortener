@@ -46,7 +46,7 @@ func LoadConfig() (*Config, error) {
 	if *flagFileName != "" {
 		cfg.FileName = *flagFileName
 	} else {
-		cfg.FileName = os.Getenv("FILE_STORAGE_PATH ")
+		cfg.FileName = os.Getenv("FILE_STORAGE_PATH")
 	}
 	log.Println("File Name = ",cfg.FileName)
 	// Валидация
