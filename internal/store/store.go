@@ -61,7 +61,7 @@ func SaveInFile(s Storage, fileName string) {
 	}
 	data = append(data, '\n')
 
-	_, err = file.Write(data)
+	_, _ = file.Write(data)
 }
 func (s *URLStorage) Get(shortKey string) (string, bool) {
 	url, exists := s.data[shortKey]
