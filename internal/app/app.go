@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,11 +13,14 @@ import (
 
 	"github.com/dron1337/shortener/internal/config"
 	"github.com/dron1337/shortener/internal/store"
+	_ "github.com/lib/pq"
 )
 
 type Server struct {
 	Logger     *log.Logger
 	HTTPServer *http.Server
+	Config     *config.Config
+	DB         *sql.DB
 }
 
 func (s *Server) Start() error {
@@ -52,26 +57,55 @@ func (s *Server) Stop() error {
 		s.Logger.Printf("Graceful shutdown failed: %v", err)
 		return err
 	}
+	if s.DB != nil {
+		if err := s.DB.Close(); err != nil {
+			s.Logger.Printf("Error closing DB connection: %v", err)
+		}
+	}
 
 	s.Logger.Println("Server stopped gracefully")
 	return nil
 }
-func NewServer(cfg *config.Config, logger *log.Logger) *Server {
-	store := store.New()
-	r := NewRouter(cfg, store)
 
-	s := &http.Server{
-		Addr:         ":8080",
-		Handler:      r,
-		ErrorLog:     logger,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  15 * time.Second,
+func NewServer(logger *log.Logger, cfg *config.Config, store *store.URLStorage) (*Server, error) {
+	var db *sql.DB
+	var err error
+
+	if cfg.DBConnection != "" {
+		db, err = CreateDBConnection(cfg.DBConnection)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to database: %w", err)
+		}
 	}
+
+	mux := NewRouter(cfg, db, store)
 
 	return &Server{
-		Logger:     logger,
-		HTTPServer: s,
-	}
+		Logger: logger,
+		HTTPServer: &http.Server{
+			Addr:         cfg.ServerAddress,
+			Handler:      mux,
+			ErrorLog:     logger,
+			ReadTimeout:  5 * time.Second,
+			WriteTimeout: 10 * time.Second,
+			IdleTimeout:  15 * time.Second,
+		},
+		Config: cfg,
+		DB:     db,
+	}, nil
+}
 
+func CreateDBConnection(connStr string) (*sql.DB, error) {
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, fmt.Errorf("error opening DB connection: %w", err)
+	}
+	if err = db.Ping(); err != nil {
+		return nil, fmt.Errorf("error pinging DB: %w", err)
+	}
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
+	return db, nil
 }

@@ -1,7 +1,8 @@
 package app
 
 import (
-	"log"
+	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,21 +14,23 @@ import (
 )
 
 func TestPostShortenURL(t *testing.T) {
-	// Инициализируем роутер или хендлер
-	handler := setupServer()
+	// Настраиваем тестовую конфигурацию
+	cfg := &config.Config{
+		ServerAddress: "localhost:8080",
+		BaseURL:       "http://test.example",
+	}
+
+	handler := setupTestServer(cfg)
+	testURL := "https://practicum.yandex.ru/"
 
 	// Создаем тестовый запрос
-	body := strings.NewReader("https://practicum.yandex.ru/")
-	req, err := http.NewRequest("POST", "/", body)
+	req, err := http.NewRequest("POST", "/", strings.NewReader(testURL))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "text/plain")
 
-	// Создаем ResponseRecorder для записи ответа
 	rr := httptest.NewRecorder()
-
-	// Вызываем хендлер напрямую
 	handler.ServeHTTP(rr, req)
 
 	// Проверяем статус код
@@ -37,62 +40,59 @@ func TestPostShortenURL(t *testing.T) {
 	}
 
 	// Проверяем Content-Type
-	expectedContentType := "text/plain"
-	if contentType := rr.Header().Get("Content-Type"); contentType != expectedContentType {
+	if contentType := rr.Header().Get("Content-Type"); contentType != "text/plain" {
 		t.Errorf("handler returned wrong content type: got %v want %v",
-			contentType, expectedContentType)
+			contentType, "text/plain")
 	}
 
-	// Проверяем что вернулся сокращенный URL
+	// Проверяем что вернулся сокращенный URL с правильным базовым адресом
 	shortURL := rr.Body.String()
-	if !strings.HasPrefix(shortURL, "http://localhost:8080/") {
-		t.Errorf("handler returned unexpected body: got %v, should start with http://localhost:8080/",
-			shortURL)
+	if !strings.HasPrefix(shortURL, cfg.BaseURL+"/") {
+		t.Errorf("handler returned unexpected body: got %v, should start with %v/",
+			shortURL, cfg.BaseURL)
 	}
 }
 
 func TestGetRedirectURL(t *testing.T) {
-	// Инициализируем роутер или хендлер
-	handler := setupServer()
+	cfg := &config.Config{
+		ServerAddress: "localhost:8080",
+		BaseURL:       "http://test.example",
+	}
+	handler := setupTestServer(cfg)
+	testURL := "https://practicum.yandex.ru/"
 
 	// Сначала создаем сокращенную ссылку
-	body := strings.NewReader("https://practicum.yandex.ru/")
-	reqPost, err := http.NewRequest("POST", "/", body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reqPost.Header.Set("Content-Type", "text/plain")
-
 	rrPost := httptest.NewRecorder()
+	reqPost, _ := http.NewRequest("POST", "/", strings.NewReader(testURL))
+	reqPost.Header.Set("Content-Type", "text/plain")
 	handler.ServeHTTP(rrPost, reqPost)
+
 	shortURL := rrPost.Body.String()
-	shortID := strings.TrimPrefix(shortURL, "http://localhost:8080/")
+	shortID := strings.TrimPrefix(shortURL, cfg.BaseURL+"/")
 
 	// Теперь тестируем редирект
-	reqGet, err := http.NewRequest("GET", "/"+shortID, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	reqGet, _ := http.NewRequest("GET", "/"+shortID, nil)
 	rrGet := httptest.NewRecorder()
 	handler.ServeHTTP(rrGet, reqGet)
 
-	// Проверяем статус код
+	// Проверки
 	if status := rrGet.Code; status != http.StatusTemporaryRedirect {
 		t.Errorf("handler returned wrong status code: got %v want %v",
 			status, http.StatusTemporaryRedirect)
 	}
 
-	// Проверяем Location header
-	expectedLocation := "https://practicum.yandex.ru/"
-	if location := rrGet.Header().Get("Location"); location != expectedLocation {
+	if location := rrGet.Header().Get("Location"); location != testURL {
 		t.Errorf("handler returned wrong Location header: got %v want %v",
-			location, expectedLocation)
+			location, testURL)
 	}
 }
 
 func TestInvalidRequests(t *testing.T) {
-	handler := setupServer()
+	cfg := &config.Config{
+		ServerAddress: "localhost:8080",
+		BaseURL:       "http://test.example",
+	}
+	handler := setupTestServer(cfg)
 
 	tests := []struct {
 		name        string
@@ -106,7 +106,15 @@ func TestInvalidRequests(t *testing.T) {
 			name:       "GET to root",
 			method:     "GET",
 			path:       "/",
-			wantStatus: http.StatusBadRequest,
+			wantStatus: http.StatusMethodNotAllowed,
+		},
+		{
+			name:        "Empty body",
+			method:      "POST",
+			path:        "/",
+			body:        "",
+			contentType: "text/plain",
+			wantStatus:  http.StatusBadRequest,
 		},
 		{
 			name:        "Invalid URL",
@@ -126,56 +134,114 @@ func TestInvalidRequests(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var body *strings.Reader
-			if tt.body != "" {
-				body = strings.NewReader(tt.body)
-			} else {
-				body = strings.NewReader("")
-			}
-
-			req, err := http.NewRequest(tt.method, tt.path, body)
-			if err != nil {
-				t.Fatal(err)
-			}
-
+			req, _ := http.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
 			if tt.contentType != "" {
 				req.Header.Set("Content-Type", tt.contentType)
 			}
 
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
-			t.Logf("Request: %s %s", tt.method, tt.path)
-			t.Logf("Response status: %d", rr.Code)
-			t.Logf("Response headers: %v", rr.Header())
+
 			if status := rr.Code; status != tt.wantStatus {
-				t.Errorf("handler returned wrong status code: got %v want %v",
-					status, tt.wantStatus)
+				t.Errorf("%s: handler returned wrong status code: got %v want %v",
+					tt.name, status, tt.wantStatus)
 			}
 		})
 	}
 }
-func setupServer() http.Handler {
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatal("Failed to load config:", err)
+
+func TestGenerateJSONURL(t *testing.T) {
+	cfg := &config.Config{
+		ServerAddress: "localhost:8888",
+		BaseURL:       "http://test.example",
 	}
+	handler := setupTestServer(cfg)
+
+	tests := []struct {
+		name           string
+		requestBody    string
+		contentType    string
+		expectedStatus int
+		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name:           "Valid JSON request",
+			requestBody:    `{"url":"https://practicum.yandex.ru/"}`,
+			contentType:    "application/json",
+			expectedStatus: http.StatusCreated,
+			checkResponse: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				if contentType := rr.Header().Get("Content-Type"); contentType != "application/json" {
+					t.Errorf("expected content type application/json, got %s", contentType)
+				}
+
+				var resp ResponseData
+				if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("failed to unmarshal response: %v", err)
+				}
+
+				if !strings.HasPrefix(resp.Result, cfg.BaseURL+"/") {
+					t.Errorf("expected result to start with %s/, got %s", cfg.BaseURL, resp.Result)
+				}
+			},
+		},
+		{
+			name:           "Empty URL",
+			requestBody:    `{"url":""}`,
+			contentType:    "application/json",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Invalid JSON",
+			requestBody:    `{"url":"https://practicum.yandex.ru/"`,
+			contentType:    "application/json",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "Missing URL field",
+			requestBody:    `{"not_url":"https://practicum.yandex.ru/"}`,
+			contentType:    "application/json",
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequest("POST", "/api/shorten", strings.NewReader(tt.requestBody))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Content-Type", tt.contentType)
+
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+
+			if status := rr.Code; status != tt.expectedStatus {
+				t.Errorf("handler returned wrong status code: got %v want %v",
+					status, tt.expectedStatus)
+			}
+
+			if tt.checkResponse != nil {
+				tt.checkResponse(t, rr)
+			}
+		})
+	}
+}
+
+// setupTestServer создает тестовый сервер с нужной конфигурацией
+func setupTestServer(cfg *config.Config) http.Handler {
 	store := store.New()
-	handler := NewURLHandler(store)
+	var db *sql.DB
+	if cfg.DBConnection != "" {
+		// В тестах мы не создаем реальное подключение к БД
+		db = nil
+	}
+
 	r := mux.NewRouter()
-
-	// Регистрируем пути из конфига
-	r.HandleFunc(cfg.Paths.GetURL, handler.GetURL).Methods("GET")
-	r.HandleFunc(cfg.Paths.CreateURL, handler.GenerateURL).Methods("POST")
-
-	// Обработчик для некорректных GET запросов на корень
-	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			w.Header().Set("Content-Type", "text/plain")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		http.NotFound(w, r)
-	}).Methods("GET")
+	handler := NewURLHandler(store, cfg, db)
+	//r.HandleFunc("/ping", handler.CheckDBConnection).Methods("GET")
+	r.HandleFunc("/{key}", handler.GetURL).Methods("GET")
+	r.HandleFunc("/", handler.GenerateURL).Methods("POST")
+	r.HandleFunc("/api/shorten", handler.GenerateJSONURL).Methods("POST")
 
 	return r
 }

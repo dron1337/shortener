@@ -1,6 +1,8 @@
 package app
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -8,19 +10,28 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/dron1337/shortener/internal/config"
 	"github.com/dron1337/shortener/internal/store"
 	"github.com/gorilla/mux"
 )
 
 type URLHandler struct {
-	store *store.URLStorage
+	store  *store.URLStorage
+	config *config.Config
+	db     *sql.DB
+}
+type RequestData struct {
+	URL string `json:"url"`
+}
+type ResponseData struct {
+	Result string `json:"result"`
 }
 
-func NewURLHandler(store *store.URLStorage) *URLHandler {
-	return &URLHandler{store: store}
+func NewURLHandler(store *store.URLStorage, cfg *config.Config, db *sql.DB) *URLHandler {
+	return &URLHandler{store: store, config: cfg, db: db}
 }
 func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Request: %s %s", r.Method, r.URL.Path)
+	log.Printf("Incoming request: %s %s, Headers: %v", r.Method, r.URL, r.Header)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.Header().Set("Content-Type", "text/plain")
@@ -40,12 +51,58 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortURL := h.store.Save(originalURL)
-	log.Printf("Short URL: %s", shortURL)
+	shortURL := h.store.Save(originalURL, h.config.FileName)
+	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
+	log.Printf("Short URL: %s", fullShortURL)
 	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Content-Length", fmt.Sprint(len(shortURL)))
+	//w.Header().Set("Content-Length", fmt.Sprint(len(fullShortURL)))
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(shortURL))
+	w.Write([]byte(fullShortURL))
+}
+func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	log.Printf("Raw body: %q", body)
+	var data RequestData
+	if err := json.Unmarshal(body, &data); err != nil {
+		log.Println("error parse json:", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	log.Println("URL:", data.URL)
+	if data.URL == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if _, err := url.ParseRequestURI(data.URL); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	shortURL := h.store.Save(data.URL, h.config.FileName)
+	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
+	response := ResponseData{Result: fullShortURL}
+	jsonBytes, err := json.Marshal(response)
+	if err != nil {
+		log.Println("error parse response json:", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "application/json")
+	//w.Header().Set("Content-Length", fmt.Sprint(len(fullShortURL)))
+	//w.Header().Set("Content-Length", fmt.Sprint(len(jsonBytes)))
+	w.WriteHeader(http.StatusCreated)
+	log.Printf("Sending response: %s", jsonBytes)
+	w.Write(jsonBytes)
 }
 func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Request: %s %s", r.Method, r.URL.Path)
@@ -67,4 +124,14 @@ func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Location", url)
 	w.WriteHeader(http.StatusTemporaryRedirect)
+}
+func (h *URLHandler) CheckDBConnection(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Request: %s %s", r.Method, r.URL.Path)
+	err := h.db.Ping()
+	if err != nil {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
