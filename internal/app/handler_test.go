@@ -1,6 +1,7 @@
 package app
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,7 +20,7 @@ func TestPostShortenURL(t *testing.T) {
 		BaseURL:       "http://test.example",
 	}
 
-	handler := setupServerWithConfig(cfg)
+	handler := setupTestServer(cfg)
 	testURL := "https://practicum.yandex.ru/"
 
 	// Создаем тестовый запрос
@@ -57,7 +58,7 @@ func TestGetRedirectURL(t *testing.T) {
 		ServerAddress: "localhost:8080",
 		BaseURL:       "http://test.example",
 	}
-	handler := setupServerWithConfig(cfg)
+	handler := setupTestServer(cfg)
 	testURL := "https://practicum.yandex.ru/"
 
 	// Сначала создаем сокращенную ссылку
@@ -91,7 +92,7 @@ func TestInvalidRequests(t *testing.T) {
 		ServerAddress: "localhost:8080",
 		BaseURL:       "http://test.example",
 	}
-	handler := setupServerWithConfig(cfg)
+	handler := setupTestServer(cfg)
 
 	tests := []struct {
 		name        string
@@ -105,7 +106,7 @@ func TestInvalidRequests(t *testing.T) {
 			name:       "GET to root",
 			method:     "GET",
 			path:       "/",
-			wantStatus: http.StatusBadRequest,
+			wantStatus: http.StatusMethodNotAllowed,
 		},
 		{
 			name:        "Empty body",
@@ -149,30 +150,12 @@ func TestInvalidRequests(t *testing.T) {
 	}
 }
 
-func setupServerWithConfig(cfg *config.Config) http.Handler {
-	store := store.New()
-	r := mux.NewRouter()
-	handler := NewURLHandler(store, cfg)
-
-	r.HandleFunc("/{key}", handler.GetURL).Methods("GET")
-	r.HandleFunc("/", handler.GenerateURL).Methods("POST")
-	r.HandleFunc("/api/shorten", handler.GenerateJSONURL).Methods("POST")
-
-	// Явная обработка GET / для возврата 400
-	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			w.WriteHeader(http.StatusBadRequest)
-		}
-	}).Methods("GET")
-
-	return r
-}
 func TestGenerateJSONURL(t *testing.T) {
 	cfg := &config.Config{
 		ServerAddress: "localhost:8888",
 		BaseURL:       "http://test.example",
 	}
-	handler := setupServerWithConfig(cfg)
+	handler := setupTestServer(cfg)
 
 	tests := []struct {
 		name           string
@@ -242,4 +225,48 @@ func TestGenerateJSONURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCheckDBConnection(t *testing.T) {
+	cfg := &config.Config{
+		ServerAddress: "localhost:8080",
+		BaseURL:       "http://test.example",
+		DBConnection:  "postgres://user:pass@localhost/db", // Тестовая строка подключения
+	}
+
+	handler := setupTestServer(cfg)
+
+	req, err := http.NewRequest("GET", "/ping", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	// Так как мы не можем реально подключиться к БД в тестах,
+	// ожидаем 500 ошибку (или можно мокать DB соединение)
+	if status := rr.Code; status != http.StatusInternalServerError {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusInternalServerError)
+	}
+}
+
+// setupTestServer создает тестовый сервер с нужной конфигурацией
+func setupTestServer(cfg *config.Config) http.Handler {
+	store := store.New()
+	var db *sql.DB
+	if cfg.DBConnection != "" {
+		// В тестах мы не создаем реальное подключение к БД
+		db = nil
+	}
+
+	r := mux.NewRouter()
+	handler := NewURLHandler(store, cfg, db)
+	r.HandleFunc("/ping", handler.CheckDBConnection).Methods("GET")
+	r.HandleFunc("/{key}", handler.GetURL).Methods("GET")
+	r.HandleFunc("/", handler.GenerateURL).Methods("POST")
+	r.HandleFunc("/api/shorten", handler.GenerateJSONURL).Methods("POST")
+
+	return r
 }

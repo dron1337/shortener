@@ -14,6 +14,7 @@ type Config struct {
 	ServerAddress string
 	BaseURL       string
 	FileName      string
+	DBConnection  string
 }
 
 func LoadConfig() (*Config, error) {
@@ -26,6 +27,7 @@ func LoadConfig() (*Config, error) {
 	flagAddr := flag.String("a", "", "HTTP server address")
 	flagBase := flag.String("b", "", "Base URL for shortened URLs")
 	flagFileName := flag.String("f", "", "File name")
+	flagFDBConnection := flag.String("d", "", "DB Connection")
 	flag.Parse()
 	err := godotenv.Load()
 	if err != nil {
@@ -48,7 +50,11 @@ func LoadConfig() (*Config, error) {
 	} else {
 		cfg.FileName = os.Getenv("FILE_STORAGE_PATH")
 	}
-	log.Println("File Name = ",cfg.FileName)
+	if *flagFDBConnection != "" {
+		cfg.DBConnection = *flagFDBConnection
+	} else {
+		cfg.DBConnection = os.Getenv("DATABASE_DSN")
+	}
 	// Валидация
 	if _, err := url.ParseRequestURI(cfg.BaseURL); err != nil {
 		return nil, fmt.Errorf("invalid base URL: %w", err)

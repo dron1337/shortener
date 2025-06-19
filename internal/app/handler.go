@@ -1,6 +1,7 @@
 package app
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 type URLHandler struct {
 	store  *store.URLStorage
 	config *config.Config
+	db     *sql.DB
 }
 type RequestData struct {
 	URL string `json:"url"`
@@ -25,8 +27,8 @@ type ResponseData struct {
 	Result string `json:"result"`
 }
 
-func NewURLHandler(store *store.URLStorage, cfg *config.Config) *URLHandler {
-	return &URLHandler{store: store, config: cfg}
+func NewURLHandler(store *store.URLStorage, cfg *config.Config, db *sql.DB) *URLHandler {
+	return &URLHandler{store: store, config: cfg, db: db}
 }
 func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Incoming request: %s %s, Headers: %v", r.Method, r.URL, r.Header)
@@ -49,7 +51,7 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortURL := h.store.Save(originalURL,h.config.FileName)
+	shortURL := h.store.Save(originalURL, h.config.FileName)
 	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
 	log.Printf("Short URL: %s", fullShortURL)
 	w.Header().Set("Content-Type", "text/plain")
@@ -122,4 +124,14 @@ func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Location", url)
 	w.WriteHeader(http.StatusTemporaryRedirect)
+}
+func (h *URLHandler) CheckDBConnection(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Request: %s %s", r.Method, r.URL.Path)
+	err := h.db.Ping()
+	if err != nil {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }

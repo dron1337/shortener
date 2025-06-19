@@ -5,6 +5,7 @@ import (
 
 	"github.com/dron1337/shortener/internal/app"
 	"github.com/dron1337/shortener/internal/config"
+	"github.com/dron1337/shortener/internal/store"
 )
 
 func main() {
@@ -15,7 +16,13 @@ func main() {
 		logger.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	server := app.NewServer(logger, cfg)
+	urlStore := store.New()
+
+	server, err := app.NewServer(logger, cfg, urlStore)
+	if err != nil {
+		logger.Fatalf("Failed to create server: %v", err)
+	}
+
 	if err := server.Start(); err != nil {
 		server.Logger.Fatalf("Error starting server: %s", err)
 	}
