@@ -86,3 +86,4 @@ func (s *URLStorage) Get(shortKey string) (string, bool) {
 	url, exists := s.data[shortKey]
 	return url, exists
 }
+
