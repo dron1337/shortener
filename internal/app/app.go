@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -20,7 +18,7 @@ type Server struct {
 	Logger     *log.Logger
 	HTTPServer *http.Server
 	Config     *config.Config
-	DB         *sql.DB
+	URLStore   store.URLStorage
 }
 
 func (s *Server) Start() error {
@@ -57,28 +55,13 @@ func (s *Server) Stop() error {
 		s.Logger.Printf("Graceful shutdown failed: %v", err)
 		return err
 	}
-	if s.DB != nil {
-		if err := s.DB.Close(); err != nil {
-			s.Logger.Printf("Error closing DB connection: %v", err)
-		}
-	}
-
 	s.Logger.Println("Server stopped gracefully")
 	return nil
 }
 
-func NewServer(logger *log.Logger, cfg *config.Config, store *store.URLStorage) (*Server, error) {
-	var db *sql.DB
-	var err error
+func NewServer(logger *log.Logger, cfg *config.Config, urlStore store.URLStorage) (*Server, error) {
 
-	if cfg.DBConnection != "" {
-		db, err = CreateDBConnection(cfg.DBConnection)
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to database: %w", err)
-		}
-	}
-
-	mux := NewRouter(cfg, db, store)
+	mux := NewRouter(cfg, urlStore, logger)
 
 	return &Server{
 		Logger: logger,
@@ -90,22 +73,7 @@ func NewServer(logger *log.Logger, cfg *config.Config, store *store.URLStorage) 
 			WriteTimeout: 10 * time.Second,
 			IdleTimeout:  15 * time.Second,
 		},
-		Config: cfg,
-		DB:     db,
+		Config:   cfg,
+		URLStore: urlStore,
 	}, nil
-}
-
-func CreateDBConnection(connStr string) (*sql.DB, error) {
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return nil, fmt.Errorf("error opening DB connection: %w", err)
-	}
-	if err = db.Ping(); err != nil {
-		return nil, fmt.Errorf("error pinging DB: %w", err)
-	}
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
-	db.SetConnMaxLifetime(5 * time.Minute)
-
-	return db, nil
 }

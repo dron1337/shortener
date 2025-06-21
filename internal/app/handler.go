@@ -1,7 +1,6 @@
 package app
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,14 +10,15 @@ import (
 	"strings"
 
 	"github.com/dron1337/shortener/internal/config"
+	"github.com/dron1337/shortener/internal/service"
 	"github.com/dron1337/shortener/internal/store"
 	"github.com/gorilla/mux"
 )
 
 type URLHandler struct {
-	store  *store.URLStorage
+	store  store.URLStorage
+	logger *log.Logger
 	config *config.Config
-	db     *sql.DB
 }
 type RequestData struct {
 	URL string `json:"url"`
@@ -27,11 +27,11 @@ type ResponseData struct {
 	Result string `json:"result"`
 }
 
-func NewURLHandler(store *store.URLStorage, cfg *config.Config, db *sql.DB) *URLHandler {
-	return &URLHandler{store: store, config: cfg, db: db}
+func NewURLHandler(cfg *config.Config, urlStore store.URLStorage, logger *log.Logger) *URLHandler {
+	return &URLHandler{config: cfg, store: urlStore, logger: logger}
 }
 func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Incoming request: %s %s, Headers: %v", r.Method, r.URL, r.Header)
+	h.logger.Printf("Incoming request: %s %s, Headers: %v", r.Method, r.URL, r.Header)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.Header().Set("Content-Type", "text/plain")
@@ -51,11 +51,17 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortURL := h.store.Save(originalURL, h.config.FileName)
+	shortURL := service.GenerateShortKey()
+	err = h.store.Save(r.Context(), originalURL, shortURL)
+	if err != nil {
+		h.logger.Println("error store save:", err)
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
-	log.Printf("Short URL: %s", fullShortURL)
+	h.logger.Printf("Short URL: %s", fullShortURL)
 	w.Header().Set("Content-Type", "text/plain")
-	//w.Header().Set("Content-Length", fmt.Sprint(len(fullShortURL)))
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(fullShortURL))
 }
@@ -67,15 +73,15 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
-	log.Printf("Raw body: %q", body)
+	h.logger.Printf("Raw body: %q", body)
 	var data RequestData
 	if err := json.Unmarshal(body, &data); err != nil {
-		log.Println("error parse json:", err)
+		h.logger.Println("error parse json:", err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	log.Println("URL:", data.URL)
+	h.logger.Println("URL:", data.URL)
 	if data.URL == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -86,26 +92,29 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortURL := h.store.Save(data.URL, h.config.FileName)
+	shortURL := service.GenerateShortKey()
+	err = h.store.Save(r.Context(), data.URL, shortURL)
+	if err != nil {
+		h.logger.Println("error store save:", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
 	response := ResponseData{Result: fullShortURL}
 	jsonBytes, err := json.Marshal(response)
 	if err != nil {
 		log.Println("error parse response json:", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		return
+
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
-	//w.Header().Set("Content-Length", fmt.Sprint(len(fullShortURL)))
-	//w.Header().Set("Content-Length", fmt.Sprint(len(jsonBytes)))
 	w.WriteHeader(http.StatusCreated)
-	log.Printf("Sending response: %s", jsonBytes)
+	h.logger.Printf("Sending response: %s", jsonBytes)
 	w.Write(jsonBytes)
 }
 func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Request: %s %s", r.Method, r.URL.Path)
+	h.logger.Printf("Request: %s %s", r.Method, r.URL.Path)
 	vars := mux.Vars(r)
 	key := vars["key"]
 	if key == "" {
@@ -113,11 +122,11 @@ func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	log.Printf("Key: %s", key)
-	url, ok := h.store.Get(key)
-	log.Printf("Url: %s exists %t", key, ok)
-	if !ok {
-		log.Printf("Key not found: %s", key)
+	h.logger.Printf("Key: %s", key)
+	url, err := h.store.Get(r.Context(), key)
+	h.logger.Println(url)
+	if err != nil {
+		h.logger.Printf("Key not found: %s", key)
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -126,9 +135,34 @@ func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 func (h *URLHandler) CheckDBConnection(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Request: %s %s", r.Method, r.URL.Path)
-	err := h.db.Ping()
-	if err != nil {
+	if pgStorage, ok := h.store.(*store.PostgresStorage); ok {
+		err := pgStorage.CheckConnection(r.Context())
+		if err != nil {
+			h.logger.Printf("Postgres connection check failed: %v", err)
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	} else if composite, ok := h.store.(*store.CompositeStorage); ok {
+		// Это композитное хранилище, ищем Postgres внутри
+		hasPostgres := false
+		for _, s := range composite.GetStorages() {
+			if pg, ok := s.(*store.PostgresStorage); ok {
+				hasPostgres = true
+				if err := pg.CheckConnection(r.Context()); err != nil {
+					w.Header().Set("Content-Type", "text/plain")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			}
+		}
+		if !hasPostgres {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// Другой тип хранилища
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusInternalServerError)
 		return

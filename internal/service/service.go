@@ -6,13 +6,15 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"time"
 )
 
 const (
 	countShortKey = 8
 )
 
-func GenerateShortKey(r *rand.Rand) string {
+func GenerateShortKey() string {
+	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, countShortKey)
 	for i := range b {
