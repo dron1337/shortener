@@ -7,11 +7,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 type FileStorage struct {
-	mu       sync.Mutex
+	//mu       sync.Mutex
 	filePath string
 }
 
@@ -22,9 +21,6 @@ func NewFileStorage(filePath string) *FileStorage {
 }
 
 func (s *FileStorage) Save(ctx context.Context, originalURL, shortKey string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	record := struct {
 		ShortKey    string `json:"short_key"`
 		OriginalURL string `json:"original_url"`
@@ -57,10 +53,6 @@ func (s *FileStorage) Save(ctx context.Context, originalURL, shortKey string) er
 }
 
 func (s *FileStorage) Get(ctx context.Context, shortKey string) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Проверяем отмену контекста перед началом операции
 	select {
 	case <-ctx.Done():
 		return "", ctx.Err()
