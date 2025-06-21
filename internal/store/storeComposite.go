@@ -22,8 +22,8 @@ func NewCompositeStorage(storages ...URLStorage) *CompositeStorage {
 
 func (s *CompositeStorage) Save(ctx context.Context, originalURL, shortKey string) error {
 	for _, storage := range s.storages {
-		fmt.Println("originalURL=", storage,originalURL)
-		fmt.Println("shortKey=", storage,shortKey)
+		fmt.Println("originalURL=", storage, originalURL)
+		fmt.Println("shortKey=", storage, shortKey)
 		if err := storage.Save(ctx, originalURL, shortKey); err != nil {
 			return err
 		}
@@ -32,8 +32,10 @@ func (s *CompositeStorage) Save(ctx context.Context, originalURL, shortKey strin
 }
 
 func (s *CompositeStorage) Get(ctx context.Context, shortKey string) (string, error) {
+	fmt.Println(s.storages)
 	for _, storage := range s.storages {
 		if url, err := storage.Get(ctx, shortKey); err == nil {
+			fmt.Println("Возвращаю CompositeStorage url", url)
 			return url, nil
 		}
 	}

@@ -27,6 +27,7 @@ func (s *InMemoryStorage) Save(ctx context.Context, originalURL, shortKey string
 func (s *InMemoryStorage) Get(ctx context.Context, shortKey string) (string, error) {
 	fmt.Println(s.data)
 	if url, exists := s.data[shortKey]; exists {
+		fmt.Println("Возвращаю url", url)
 		return url, nil
 	}
 	return "", fmt.Errorf("URL not found")
