@@ -18,6 +18,7 @@ func NewInMemoryStorage() *InMemoryStorage {
 
 func (s *InMemoryStorage) Save(ctx context.Context, originalURL, shortKey string) error {
 	s.data[shortKey] = originalURL
+	fmt.Println(s.data)
 	return nil
 }
 
