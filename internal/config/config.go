@@ -22,7 +22,6 @@ func LoadConfig() (*Config, error) {
 	cfg := Config{
 		ServerAddress: "localhost:8080",
 		BaseURL:       "http://localhost:8080",
-		FileName:      "tmp/short-url-db.json",
 	}
 	flagAddr := flag.String("a", "", "HTTP server address")
 	flagBase := flag.String("b", "", "Base URL for shortened URLs")

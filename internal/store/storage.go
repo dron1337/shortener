@@ -27,7 +27,7 @@ func (s *InMemoryStorage) Save(ctx context.Context, originalURL, shortKey string
 func (s *InMemoryStorage) Get(ctx context.Context, shortKey string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
+	fmt.Println(s.data)
 	if url, exists := s.data[shortKey]; exists {
 		return url, nil
 	}

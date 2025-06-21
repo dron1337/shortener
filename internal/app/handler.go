@@ -124,6 +124,7 @@ func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 	}
 	h.logger.Printf("Key: %s", key)
 	url, err := h.store.Get(r.Context(), key)
+	h.logger.Printf(url)
 	if err != nil {
 		h.logger.Printf("Key not found: %s", key)
 		w.Header().Set("Content-Type", "text/plain")
