@@ -52,7 +52,7 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	shortURL := service.GenerateShortKey()
-	err = h.store.Save(r.Context(), originalURL, service.GenerateShortKey())
+	err = h.store.Save(r.Context(), originalURL, shortURL)
 	if err != nil {
 		h.logger.Println("error store save:", err)
 		w.Header().Set("Content-Type", "text/plain")
