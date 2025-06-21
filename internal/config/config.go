@@ -55,7 +55,6 @@ func LoadConfig() (*Config, error) {
 	} else {
 		cfg.DBConnection = os.Getenv("DATABASE_DSN")
 	}
-	// Валидация
 	if _, err := url.ParseRequestURI(cfg.BaseURL); err != nil {
 		return nil, fmt.Errorf("invalid base URL: %w", err)
 	}
