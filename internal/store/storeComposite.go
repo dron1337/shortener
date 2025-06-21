@@ -22,6 +22,8 @@ func NewCompositeStorage(storages ...URLStorage) *CompositeStorage {
 
 func (s *CompositeStorage) Save(ctx context.Context, originalURL, shortKey string) error {
 	for _, storage := range s.storages {
+		fmt.Println("originalURL=", storage,originalURL)
+		fmt.Println("shortKey=", storage,shortKey)
 		if err := storage.Save(ctx, originalURL, shortKey); err != nil {
 			return err
 		}
