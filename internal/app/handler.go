@@ -183,45 +183,45 @@ func (h *URLHandler) GenerateBatchJSONURL(w http.ResponseWriter, r *http.Request
 	// Декодирование тела запроса
 	var batch BatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
-			h.logger.Println("Failed to decode batch request:", err)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			return
+		h.logger.Println("Failed to decode batch request:", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 	defer r.Body.Close()
 
 	// Проверка на пустой batch
 	if len(batch) == 0 {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			return
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	var response BatchResponse
 
 	// Обработка каждого URL в batch
 	for _, item := range batch {
-			shortKey := service.GenerateShortKey()
-			if err := h.store.Save(r.Context(), item.OriginalURL, shortKey); err != nil {
-					h.logger.Printf("Failed to save URL: %v", err)
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-			}
+		shortKey := service.GenerateShortKey()
+		if err := h.store.Save(r.Context(), item.OriginalURL, shortKey); err != nil {
+			h.logger.Printf("Failed to save URL: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
-			// Формирование элемента ответа
-			response = append(response, BatchResponseItem{
-					CorrelationID: item.CorrelationID,
-					ShortURL:      fmt.Sprintf("%s/%s", h.config.BaseURL, shortKey),
-			})
+		// Формирование элемента ответа
+		response = append(response, BatchResponseItem{
+			CorrelationID: item.CorrelationID,
+			ShortURL:      fmt.Sprintf("%s/%s", h.config.BaseURL, shortKey),
+		})
 	}
 
 	// Отправка ответа
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-			h.logger.Printf("Failed to encode response: %v", err)
+		h.logger.Printf("Failed to encode response: %v", err)
 	}
 
 }
