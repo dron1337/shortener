@@ -68,7 +68,7 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 	if shortURL == "" {
 		shortURL = service.GenerateShortKey()
 		err = h.store.Save(r.Context(), originalURL, shortURL)
-		status = http.StatusInternalServerError
+		status = http.StatusCreated
 		if err != nil {
 			h.logger.Printf("Unexpected save error: %v", err)
 			w.Header().Set("Content-Type", "text/plain")
@@ -261,7 +261,7 @@ func (h *URLHandler) GenerateBatchJSONURL(w http.ResponseWriter, r *http.Request
 		if shortURL == "" {
 			shortURL = service.GenerateShortKey()
 			err := h.store.Save(r.Context(), item.OriginalURL, shortURL)
-			status = http.StatusInternalServerError
+			status = http.StatusCreated
 			if err != nil {
 				h.logger.Printf("Unexpected save error: %v", err)
 				w.Header().Set("Content-Type", "application/json")
