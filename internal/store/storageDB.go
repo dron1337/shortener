@@ -45,7 +45,6 @@ func (s *PostgresStorage) GetOriginalURL(ctx context.Context, shortKey string) (
 	return originalURL, nil
 }
 func (s *PostgresStorage) GetShortKey(ctx context.Context, originalURL string) string {
-	fmt.Println("GetShortKey")
 	var existingShortKey string
 	s.db.QueryRowContext(ctx,
 		"SELECT short_key FROM short_urls WHERE original_url = $1", originalURL).Scan(&existingShortKey)
