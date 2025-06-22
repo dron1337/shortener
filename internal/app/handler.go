@@ -206,7 +206,6 @@ func (h *URLHandler) CheckDBConnection(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// Другой тип хранилища
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
