@@ -37,7 +37,7 @@ func (s *CompositeStorage) Get(ctx context.Context, shortKey string) (string, er
 	}
 	return "", fmt.Errorf("URL not found")
 }
-func (s *CompositeStorage) GetWorkingPostgres(ctx context.Context) (*PostgresStorage, error) {
+/*func (s *CompositeStorage) GetWorkingPostgres(ctx context.Context) (*PostgresStorage, error) {
 	for _, storage := range s.storages {
 		if pg, ok := storage.(*PostgresStorage); ok {
 			if err := pg.DB().PingContext(ctx); err == nil {
@@ -47,7 +47,7 @@ func (s *CompositeStorage) GetWorkingPostgres(ctx context.Context) (*PostgresSto
 	}
 	return nil, fmt.Errorf("no working PostgresStorage available")
 }
-
+*/
 func (s *PostgresStorage) DB() *sql.DB {
 	return s.db
 }

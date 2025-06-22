@@ -26,7 +26,8 @@ func (s *PostgresStorage) Save(ctx context.Context, originalURL, shortKey string
 		originalURL, shortKey)
 	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("db save error: %w", err)
+		//	return fmt.Errorf("db save error: %w", err)
+		return err
 	}
 	return tx.Commit()
 }
@@ -43,6 +44,13 @@ func (s *PostgresStorage) Get(ctx context.Context, shortKey string) (string, err
 		return "", fmt.Errorf("db get error: %w", err)
 	}
 	return originalURL, nil
+}
+func (s *PostgresStorage) GetShortKey(ctx context.Context, originalURL string) (string, error) {
+	fmt.Println("GetShortKey")
+	var existingShortKey string
+	err := s.db.QueryRowContext(ctx,
+		"SELECT short_key FROM short_urls WHERE original_url = $1", originalURL).Scan(&existingShortKey)
+	return existingShortKey, err
 }
 func CreateDBConnection(connStr string) (*sql.DB, error) {
 	db, err := sql.Open("postgres", connStr)
