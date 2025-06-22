@@ -24,11 +24,19 @@ func (s *InMemoryStorage) Save(ctx context.Context, originalURL, shortKey string
 	return nil
 }
 
-func (s *InMemoryStorage) Get(ctx context.Context, shortKey string) (string, error) {
+func (s *InMemoryStorage) GetOriginalURL(ctx context.Context, shortKey string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if url, exists := s.data[shortKey]; exists {
 		return url, nil
 	}
 	return "", fmt.Errorf("URL not found")
+}
+func (s *InMemoryStorage) GetShortKey(ctx context.Context, originalURL string) string {
+	for i, v := range s.data {
+		if v == originalURL {
+			return i
+		}
+	}
+	return ""
 }

@@ -11,7 +11,8 @@ type CompositeStorage struct {
 }
 type URLStorage interface {
 	Save(ctx context.Context, originalURL, shortKey string) error
-	Get(ctx context.Context, shortKey string) (string, error)
+	GetOriginalURL(ctx context.Context, shortKey string) (string, error)
+	GetShortKey(ctx context.Context, originalURL string) string
 }
 
 func NewCompositeStorage(storages ...URLStorage) *CompositeStorage {
@@ -29,25 +30,26 @@ func (s *CompositeStorage) Save(ctx context.Context, originalURL, shortKey strin
 	return nil
 }
 
-func (s *CompositeStorage) Get(ctx context.Context, shortKey string) (string, error) {
+func (s *CompositeStorage) GetOriginalURL(ctx context.Context, shortKey string) (string, error) {
 	for _, storage := range s.storages {
-		if url, err := storage.Get(ctx, shortKey); err == nil {
+		if url, err := storage.GetOriginalURL(ctx, shortKey); err == nil {
 			return url, nil
 		}
 	}
 	return "", fmt.Errorf("URL not found")
 }
-/*func (s *CompositeStorage) GetWorkingPostgres(ctx context.Context) (*PostgresStorage, error) {
+func (s *CompositeStorage) GetShortKey(ctx context.Context, originalURL string) string {
+	shortKey := ""
 	for _, storage := range s.storages {
-		if pg, ok := storage.(*PostgresStorage); ok {
-			if err := pg.DB().PingContext(ctx); err == nil {
-				return pg, nil
-			}
+		shortKey = storage.GetShortKey(ctx, originalURL)
+		if shortKey != "" {
+			return shortKey
 		}
+
 	}
-	return nil, fmt.Errorf("no working PostgresStorage available")
+	return shortKey
 }
-*/
+
 func (s *PostgresStorage) DB() *sql.DB {
 	return s.db
 }

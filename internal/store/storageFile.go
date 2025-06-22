@@ -55,7 +55,7 @@ func (s *FileStorage) Save(ctx context.Context, originalURL, shortKey string) er
 	return nil
 }
 
-func (s *FileStorage) Get(ctx context.Context, shortKey string) (string, error) {
+func (s *FileStorage) GetOriginalURL(ctx context.Context, shortKey string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	select {
@@ -101,4 +101,7 @@ func (s *FileStorage) Get(ctx context.Context, shortKey string) (string, error) 
 	}
 
 	return "", fmt.Errorf("URL not found")
+}
+func (s *FileStorage) GetShortKey(ctx context.Context, originalURL string) string {
+	return ""
 }
