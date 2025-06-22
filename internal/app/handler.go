@@ -26,6 +26,17 @@ type RequestData struct {
 type ResponseData struct {
 	Result string `json:"result"`
 }
+type BatchRequestItem struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
+type BatchRequest []BatchRequestItem
+type BatchResponse []BatchResponseItem
+type BatchResponseItem struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
+}
 
 func NewURLHandler(cfg *config.Config, urlStore store.URLStorage, logger *log.Logger) *URLHandler {
 	return &URLHandler{config: cfg, store: urlStore, logger: logger}
@@ -105,7 +116,6 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 	jsonBytes, err := json.Marshal(response)
 	if err != nil {
 		log.Println("error parse response json:", err)
-
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
@@ -168,4 +178,50 @@ func (h *URLHandler) CheckDBConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+func (h *URLHandler) GenerateBatchJSONURL(w http.ResponseWriter, r *http.Request) {
+	// Декодирование тела запроса
+	var batch BatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
+			h.logger.Println("Failed to decode batch request:", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+	}
+	defer r.Body.Close()
+
+	// Проверка на пустой batch
+	if len(batch) == 0 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+	}
+
+	var response BatchResponse
+
+	// Обработка каждого URL в batch
+	for _, item := range batch {
+			shortKey := service.GenerateShortKey()
+			if err := h.store.Save(r.Context(), item.OriginalURL, shortKey); err != nil {
+					h.logger.Printf("Failed to save URL: %v", err)
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+			}
+
+			// Формирование элемента ответа
+			response = append(response, BatchResponseItem{
+					CorrelationID: item.CorrelationID,
+					ShortURL:      fmt.Sprintf("%s/%s", h.config.BaseURL, shortKey),
+			})
+	}
+
+	// Отправка ответа
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+			h.logger.Printf("Failed to encode response: %v", err)
+	}
+
 }

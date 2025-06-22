@@ -6,19 +6,26 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
 	countShortKey = 8
+	chars         = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+)
+
+var (
+	seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+	randMu     sync.Mutex
 )
 
 func GenerateShortKey() string {
-	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	randMu.Lock()
+	defer randMu.Unlock()
 	b := make([]byte, countShortKey)
 	for i := range b {
-		b[i] = chars[rand.Intn(len(chars))]
+		b[i] = chars[seededRand.Intn(len(chars))]
 	}
 	return string(b)
 }

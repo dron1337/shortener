@@ -3,10 +3,11 @@ package store
 import (
 	"context"
 	"fmt"
+	"sync"
 )
 
 type InMemoryStorage struct {
-	//	mu   sync.RWMutex
+	mu   sync.RWMutex
 	data map[string]string
 }
 
@@ -17,17 +18,16 @@ func NewInMemoryStorage() *InMemoryStorage {
 }
 
 func (s *InMemoryStorage) Save(ctx context.Context, originalURL, shortKey string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.data[shortKey] = originalURL
-	fmt.Println(s.data)
-	fmt.Println("originalURL=", originalURL)
-	fmt.Println("shortKey=", shortKey)
 	return nil
 }
 
 func (s *InMemoryStorage) Get(ctx context.Context, shortKey string) (string, error) {
-	fmt.Println(s.data)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if url, exists := s.data[shortKey]; exists {
-		fmt.Println("Возвращаю url", url)
 		return url, nil
 	}
 	return "", fmt.Errorf("URL not found")

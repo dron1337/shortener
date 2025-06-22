@@ -16,13 +16,19 @@ func NewPostgresStorage(db *sql.DB) *PostgresStorage {
 }
 
 func (s *PostgresStorage) Save(ctx context.Context, originalURL, shortKey string) error {
-	_, err := s.db.ExecContext(ctx,
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx,
 		"INSERT INTO short_urls (original_url, short_key) VALUES ($1, $2)",
 		originalURL, shortKey)
 	if err != nil {
+		tx.Rollback()
 		return fmt.Errorf("db save error: %w", err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (s *PostgresStorage) Get(ctx context.Context, shortKey string) (string, error) {
