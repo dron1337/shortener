@@ -131,8 +131,9 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	shortURL := h.store.GetShortKey(r.Context(), data.URL)
+	h.logger.Println("shortURL:", shortURL)
 	if shortURL == "" {
-		shortURL := service.GenerateShortKey()
+		shortURL = service.GenerateShortKey()
 		err = h.store.Save(r.Context(), data.URL, shortURL)
 		if err != nil {
 			h.logger.Printf("Unexpected save error: %v", err)
