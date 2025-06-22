@@ -49,7 +49,6 @@ func (s *CompositeStorage) GetShortKey(ctx context.Context, originalURL string) 
 	}
 	return shortKey
 }
-
 func (s *PostgresStorage) DB() *sql.DB {
 	return s.db
 }

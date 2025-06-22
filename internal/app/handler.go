@@ -64,9 +64,11 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	shortURL := h.store.GetShortKey(r.Context(), originalURL)
+	status := http.StatusConflict
 	if shortURL == "" {
 		shortURL = service.GenerateShortKey()
 		err = h.store.Save(r.Context(), originalURL, shortURL)
+		status = http.StatusCreated
 		if err != nil {
 			h.logger.Printf("Unexpected save error: %v", err)
 			w.Header().Set("Content-Type", "text/plain")
@@ -100,7 +102,7 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
 	h.logger.Printf("Short URL: %s", fullShortURL)
 	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(status)
 	w.Write([]byte(fullShortURL))
 }
 func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
@@ -131,10 +133,12 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	shortURL := h.store.GetShortKey(r.Context(), data.URL)
+	status := http.StatusConflict
 	h.logger.Println("shortURL:", shortURL)
 	if shortURL == "" {
 		shortURL = service.GenerateShortKey()
 		err = h.store.Save(r.Context(), data.URL, shortURL)
+		status = http.StatusCreated
 		if err != nil {
 			h.logger.Printf("Unexpected save error: %v", err)
 			w.Header().Set("Content-Type", "application/json")
@@ -172,7 +176,7 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(status)
 	h.logger.Printf("Sending response: %s", jsonBytes)
 	w.Write(jsonBytes)
 }
@@ -251,12 +255,13 @@ func (h *URLHandler) GenerateBatchJSONURL(w http.ResponseWriter, r *http.Request
 
 	var response BatchResponse
 	var shortURL string
-	// Обработка каждого URL в batch
+	status := http.StatusConflict
 	for _, item := range batch {
 		shortURL = h.store.GetShortKey(r.Context(), item.OriginalURL)
 		if shortURL == "" {
 			shortURL = service.GenerateShortKey()
 			err := h.store.Save(r.Context(), item.OriginalURL, shortURL)
+			status = http.StatusCreated
 			if err != nil {
 				h.logger.Printf("Unexpected save error: %v", err)
 				w.Header().Set("Content-Type", "application/json")
@@ -299,7 +304,7 @@ func (h *URLHandler) GenerateBatchJSONURL(w http.ResponseWriter, r *http.Request
 	// Отправка ответа
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		h.logger.Printf("Failed to encode response: %v", err)
 	}
