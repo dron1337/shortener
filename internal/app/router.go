@@ -25,6 +25,6 @@ func NewRouter(cfg *config.Config, urlStore store.URLStorage, log *log.Logger) *
 	r.HandleFunc("/{key}", handler.GetURL).Methods("GET")
 	r.HandleFunc("/", handler.GenerateURL).Methods("POST")
 	r.HandleFunc("/api/shorten", handler.GenerateJSONURL).Methods("POST")
-
+	r.HandleFunc("/api/shorten/batch", handler.GenerateBatchJSONURL).Methods("POST")
 	return r
 }
