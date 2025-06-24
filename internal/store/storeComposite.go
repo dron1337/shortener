@@ -10,7 +10,7 @@ type CompositeStorage struct {
 	storages []URLStorage
 }
 type URLStorage interface {
-	Save(ctx context.Context, originalURL, shortKey string) error
+	Save(ctx context.Context, userID, originalURL, shortKey string) error
 	GetOriginalURL(ctx context.Context, shortKey string) (string, error)
 	GetShortKey(ctx context.Context, originalURL string) string
 }
@@ -21,9 +21,9 @@ func NewCompositeStorage(storages ...URLStorage) *CompositeStorage {
 	}
 }
 
-func (s *CompositeStorage) Save(ctx context.Context, originalURL, shortKey string) error {
+func (s *CompositeStorage) Save(ctx context.Context, userID, originalURL, shortKey string) error {
 	for _, storage := range s.storages {
-		if err := storage.Save(ctx, originalURL, shortKey); err != nil {
+		if err := storage.Save(ctx, userID, originalURL, shortKey); err != nil {
 			return err
 		}
 	}

@@ -21,7 +21,7 @@ func NewFileStorage(filePath string) *FileStorage {
 	}
 }
 
-func (s *FileStorage) Save(ctx context.Context, originalURL, shortKey string) error {
+func (s *FileStorage) Save(ctx context.Context, userID, originalURL, shortKey string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	record := struct {
