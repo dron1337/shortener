@@ -15,7 +15,7 @@ func NewPostgresStorage(db *sql.DB) *PostgresStorage {
 	return &PostgresStorage{db: db}
 }
 
-func (s *PostgresStorage) Save(ctx context.Context, originalURL, shortKey string) error {
+func (s *PostgresStorage) Save(ctx context.Context, userId, originalURL, shortKey string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err

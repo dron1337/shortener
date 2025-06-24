@@ -13,7 +13,6 @@ import (
 	"github.com/dron1337/shortener/internal/service"
 	"github.com/dron1337/shortener/internal/store"
 	"github.com/gorilla/mux"
-	//"github.com/jackc/pgconn"
 )
 
 type URLHandler struct {
@@ -44,6 +43,7 @@ func NewURLHandler(cfg *config.Config, urlStore store.URLStorage, logger *log.Lo
 }
 func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 	h.logger.Printf("Incoming request: %s %s, Headers: %v", r.Method, r.URL, r.Header)
+	userID := r.Context().Value("userID").(string)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.Header().Set("Content-Type", "text/plain")
@@ -67,7 +67,7 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 	status := http.StatusConflict
 	if shortURL == "" {
 		shortURL = service.GenerateShortKey()
-		err = h.store.Save(r.Context(), originalURL, shortURL)
+		err = h.store.Save(r.Context(), userID, originalURL, shortURL)
 		status = http.StatusCreated
 		if err != nil {
 			h.logger.Printf("Unexpected save error: %v", err)
@@ -76,36 +76,32 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	/*if err != nil {
-		h.logger.Printf("Save error type: %T, value: %v", err, err)
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
-			h.logger.Printf("Unique violation detected: %v", pqErr)
-			for _, s := range h.store.(*store.CompositeStorage).GetStorages() {
-				if pg, ok := s.(*store.PostgresStorage); ok {
-					shortURL, err = pg.GetShortKey(r.Context(), originalURL)
-					if err != nil {
-						h.logger.Printf("Failed to get existing short URL: %v", err)
-						w.Header().Set("Content-Type", "application/json")
-						w.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-				}
-			}
-		} else {
-			h.logger.Printf("Unexpected save error: %v", err)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	}
-	*/
 	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
 	h.logger.Printf("Short URL: %s", fullShortURL)
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(status)
 	w.Write([]byte(fullShortURL))
 }
+func (h *URLHandler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(string)
+	h.logger.Printf("User ID из куки: %s", userID)
+	var urls []store.ResponseURLs
+	if composite, ok := h.store.(*store.CompositeStorage); ok {
+		for _, s := range composite.GetStorages() {
+			if pg, ok := s.(*store.InMemoryStorage); ok {
+				urls = pg.GetURLsByUser(r.Context(), userID, h.config.BaseURL)
+			}
+		}
+	}
+	if len(urls) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(urls)
+}
 func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(string)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -137,35 +133,13 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 	h.logger.Println("shortURL:", shortURL)
 	if shortURL == "" {
 		shortURL = service.GenerateShortKey()
-		err = h.store.Save(r.Context(), data.URL, shortURL)
+		err = h.store.Save(r.Context(), userID, data.URL, shortURL)
 		status = http.StatusCreated
 		if err != nil {
 			h.logger.Printf("Unexpected save error: %v", err)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
-			/*h.logger.Printf("Save error type: %T, value: %v", err, err)
-			if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
-				h.logger.Printf("Unique violation detected: %v", pqErr)
-				for _, s := range h.store.(*store.CompositeStorage).GetStorages() {
-					if pg, ok := s.(*store.PostgresStorage); ok {
-						shortURL, err = pg.GetShortKey(r.Context(), data.URL)
-						if err != nil {
-							h.logger.Printf("Failed to get existing short URL: %v", err)
-							w.Header().Set("Content-Type", "application/json")
-							w.WriteHeader(http.StatusInternalServerError)
-							return
-						}
-					}
-				}
-
-			} else {
-				h.logger.Printf("Unexpected save error: %v", err)
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			*/
 		}
 	}
 	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
@@ -236,6 +210,7 @@ func (h *URLHandler) CheckDBConnection(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 func (h *URLHandler) GenerateBatchJSONURL(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("userID").(string)
 	// Декодирование тела запроса
 	var batch BatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
@@ -260,7 +235,7 @@ func (h *URLHandler) GenerateBatchJSONURL(w http.ResponseWriter, r *http.Request
 		shortURL = h.store.GetShortKey(r.Context(), item.OriginalURL)
 		if shortURL == "" {
 			shortURL = service.GenerateShortKey()
-			err := h.store.Save(r.Context(), item.OriginalURL, shortURL)
+			err := h.store.Save(r.Context(), userID, item.OriginalURL, shortURL)
 			status = http.StatusCreated
 			if err != nil {
 				h.logger.Printf("Unexpected save error: %v", err)
@@ -269,32 +244,6 @@ func (h *URLHandler) GenerateBatchJSONURL(w http.ResponseWriter, r *http.Request
 				return
 			}
 		}
-		/*
-			shortKey := service.GenerateShortKey()
-			err := h.store.Save(r.Context(), item.OriginalURL, shortKey)
-			if err != nil {
-				h.logger.Printf("Save error type: %T, value: %v", err, err)
-				if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
-					h.logger.Printf("Unique violation detected: %v", pqErr)
-					for _, s := range h.store.(*store.CompositeStorage).GetStorages() {
-						if pg, ok := s.(*store.PostgresStorage); ok {
-							shortKey, err = pg.GetShortKey(r.Context(), item.OriginalURL)
-							if err != nil {
-								h.logger.Printf("Failed to get existing short URL: %v", err)
-								w.Header().Set("Content-Type", "application/json")
-								w.WriteHeader(http.StatusInternalServerError)
-								return
-							}
-						}
-					}
-				} else {
-					h.logger.Printf("Unexpected save error: %v", err)
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-			}
-		*/
 		response = append(response, BatchResponseItem{
 			CorrelationID: item.CorrelationID,
 			ShortURL:      fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL),
