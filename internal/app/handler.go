@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/dron1337/shortener/internal/auth"
 	"github.com/dron1337/shortener/internal/config"
 	"github.com/dron1337/shortener/internal/service"
 	"github.com/dron1337/shortener/internal/store"
@@ -43,7 +44,7 @@ func NewURLHandler(cfg *config.Config, urlStore store.URLStorage, logger *log.Lo
 }
 func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 	h.logger.Printf("Incoming request: %s %s, Headers: %v", r.Method, r.URL, r.Header)
-	userID := r.Context().Value("userID").(string)
+	userID := r.Context().Value(auth.UserIDKey).(string)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.Header().Set("Content-Type", "text/plain")
@@ -83,7 +84,7 @@ func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fullShortURL))
 }
 func (h *URLHandler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(string)
+	userID := r.Context().Value(auth.UserIDKey).(string)
 	h.logger.Printf("User ID из куки: %s", userID)
 	var urls []store.ResponseURLs
 	if composite, ok := h.store.(*store.CompositeStorage); ok {
@@ -101,7 +102,7 @@ func (h *URLHandler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(urls)
 }
 func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(string)
+	userID := r.Context().Value(auth.UserIDKey).(string)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -210,7 +211,7 @@ func (h *URLHandler) CheckDBConnection(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 func (h *URLHandler) GenerateBatchJSONURL(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value("userID").(string)
+	userID := r.Context().Value(auth.UserIDKey).(string)
 	// Декодирование тела запроса
 	var batch BatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {

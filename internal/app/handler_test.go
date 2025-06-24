@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dron1337/shortener/internal/auth"
 	"github.com/dron1337/shortener/internal/config"
 	"github.com/dron1337/shortener/internal/store"
 	"github.com/gorilla/mux"
@@ -106,7 +107,7 @@ func TestGenerateURLHandler(t *testing.T) {
 		handler := NewURLHandler(cfg, mockStore, log.Default())
 
 		req := httptest.NewRequest("POST", "/", strings.NewReader(testURL))
-		req = req.WithContext(context.WithValue(req.Context(), "userID", "test-user"))
+		req = req.WithContext(context.WithValue(req.Context(), auth.UserIDKey, "test-user"))
 		rr := httptest.NewRecorder()
 
 		handler.GenerateURL(rr, req)
@@ -127,7 +128,7 @@ func TestGenerateURLHandler(t *testing.T) {
 		handler := NewURLHandler(cfg, mockStore, log.Default())
 
 		req := httptest.NewRequest("POST", "/", strings.NewReader(testURL))
-		req = req.WithContext(context.WithValue(req.Context(), "userID", "test-user"))
+		req = req.WithContext(context.WithValue(req.Context(), auth.UserIDKey, "test-user"))
 		rr := httptest.NewRecorder()
 
 		handler.GenerateURL(rr, req)
@@ -158,7 +159,7 @@ func TestGenerateJSONURLHandler(t *testing.T) {
 
 		req := httptest.NewRequest("POST", "/api/shorten", strings.NewReader(requestBody))
 		req.Header.Set("Content-Type", "application/json")
-		req = req.WithContext(context.WithValue(req.Context(), "userID", "test-user"))
+		req = req.WithContext(context.WithValue(req.Context(), auth.UserIDKey, "test-user"))
 		rr := httptest.NewRecorder()
 
 		handler.GenerateJSONURL(rr, req)
