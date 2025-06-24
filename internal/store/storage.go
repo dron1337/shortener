@@ -24,14 +24,14 @@ func NewInMemoryStorage() *InMemoryStorage {
 	}
 }
 
-func (s *InMemoryStorage) Save(ctx context.Context, userId, originalURL, shortKey string) error {
+func (s *InMemoryStorage) Save(ctx context.Context, userID, originalURL, shortKey string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if user, exists := s.data[userId]; exists {
+	if user, exists := s.data[userID]; exists {
 		user[shortKey] = originalURL
 	} else {
-		s.data[userId] = make(map[string]string)
-		s.data[userId][shortKey] = originalURL
+		s.data[userID] = make(map[string]string)
+		s.data[userID][shortKey] = originalURL
 	}
 	return nil
 }

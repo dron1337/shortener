@@ -21,8 +21,8 @@ type MockStorage struct {
 	mock.Mock
 }
 
-func (m *MockStorage) Save(ctx context.Context, userId, originalURL, shortKey string) error {
-	args := m.Called(ctx, userId, originalURL, shortKey)
+func (m *MockStorage) Save(ctx context.Context, userID, originalURL, shortKey string) error {
+	args := m.Called(ctx, userID, originalURL, shortKey)
 	return args.Error(0)
 }
 
