@@ -2,9 +2,10 @@ package store
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/dron1337/shortener/internal/errors"
 )
 
 type InMemoryStorage struct {
@@ -15,8 +16,6 @@ type ResponseURLs struct {
 	OriginalURL string `json:"original_url"`
 	ShortURL    string `json:"short_url"`
 }
-
-var ErrURLNotFound = errors.New("URL not found")
 
 func NewInMemoryStorage() *InMemoryStorage {
 	return &InMemoryStorage{
@@ -44,7 +43,7 @@ func (s *InMemoryStorage) GetOriginalURL(ctx context.Context, shortKey string) (
 			return url, nil
 		}
 	}
-	return "", ErrURLNotFound
+	return "", errors.ErrURLNotFound
 }
 func (s *InMemoryStorage) GetShortKey(ctx context.Context, originalURL string) string {
 	s.mu.RLock()

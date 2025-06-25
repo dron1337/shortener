@@ -11,6 +11,7 @@ import (
 
 	"github.com/dron1337/shortener/internal/config"
 	"github.com/dron1337/shortener/internal/contextkeys"
+	"github.com/dron1337/shortener/internal/errors"
 	"github.com/dron1337/shortener/internal/service"
 	"github.com/dron1337/shortener/internal/store"
 	"github.com/gorilla/mux"
@@ -168,6 +169,12 @@ func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 	url, err := h.store.GetOriginalURL(r.Context(), key)
 	h.logger.Println(url)
 	if err != nil {
+		if err == errors.ErrURLDeleted {
+			h.logger.Printf("Key is deleted: %s", key)
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusGone)
+			return
+		}
 		h.logger.Printf("Key not found: %s", key)
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusBadRequest)
@@ -259,4 +266,27 @@ func (h *URLHandler) GenerateBatchJSONURL(w http.ResponseWriter, r *http.Request
 		h.logger.Printf("Failed to encode response: %v", err)
 	}
 
+}
+func (h *URLHandler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(contextkeys.UserIDKey).(string)
+	var urls []string
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewDecoder(r.Body).Decode(&urls); err != nil {
+		h.logger.Println("Failed to decode batch request:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	if len(urls) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if composite, ok := h.store.(*store.CompositeStorage); ok {
+		for _, s := range composite.GetStorages() {
+			if pg, ok := s.(*store.PostgresStorage); ok {
+				pg.DeleteUserURLs(r.Context(), userID, urls)
+			}
+		}
+	}
+	w.WriteHeader(http.StatusAccepted)
 }

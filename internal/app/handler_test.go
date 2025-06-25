@@ -9,9 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dron1337/shortener/internal/errors"
+
 	"github.com/dron1337/shortener/internal/config"
 	"github.com/dron1337/shortener/internal/contextkeys"
-	"github.com/dron1337/shortener/internal/store"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -77,7 +78,7 @@ func TestGetURLHandler(t *testing.T) {
 		testKey := "nonexistent"
 
 		// Настраиваем mock
-		mockStore.On("GetOriginalURL", mock.Anything, testKey).Return("", store.ErrURLNotFound)
+		mockStore.On("GetOriginalURL", mock.Anything, testKey).Return("", errors.ErrURLNotFound)
 
 		req := httptest.NewRequest("GET", "/"+testKey, nil)
 		rr := httptest.NewRecorder()
