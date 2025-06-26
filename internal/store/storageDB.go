@@ -4,7 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
+	"sync"
 	"time"
+
+	"github.com/dron1337/shortener/internal/errors"
+	"github.com/lib/pq"
 )
 
 type PostgresStorage struct {
@@ -16,14 +21,15 @@ func NewPostgresStorage(db *sql.DB) *PostgresStorage {
 }
 
 func (s *PostgresStorage) Save(ctx context.Context, userID, originalURL, shortKey string) error {
+	fmt.Println("Save PostgresStorage")
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	_, err = tx.ExecContext(ctx,
-		"INSERT INTO short_urls (original_url, short_key) VALUES ($1, $2)",
-		originalURL, shortKey)
+		"INSERT INTO short_urls (original_url, short_key,user_id) VALUES ($1, $2, $3)",
+		originalURL, shortKey, userID)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -33,14 +39,18 @@ func (s *PostgresStorage) Save(ctx context.Context, userID, originalURL, shortKe
 
 func (s *PostgresStorage) GetOriginalURL(ctx context.Context, shortKey string) (string, error) {
 	var originalURL string
+	var isDeleted bool
 	err := s.db.QueryRowContext(ctx,
-		"SELECT original_url FROM short_urls WHERE short_key = $1", shortKey).
-		Scan(&originalURL)
+		"SELECT original_url,is_deleted FROM short_urls WHERE short_key = $1", shortKey).
+		Scan(&originalURL, &isDeleted)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return "", fmt.Errorf("URL not found")
+			return "", errors.ErrURLNotFound
 		}
 		return "", fmt.Errorf("db get error: %w", err)
+	}
+	if isDeleted {
+		return "", errors.ErrURLDeleted
 	}
 	return originalURL, nil
 }
@@ -64,8 +74,10 @@ func CreateDBConnection(connStr string) (*sql.DB, error) {
 	_, err = db.Exec(`
 	CREATE TABLE IF NOT EXISTS short_urls (
 			uuid SERIAL PRIMARY KEY,
+			user_id CHAR(36) NOT NULL,
 			original_url TEXT NOT NULL,
-			short_key VARCHAR(10) UNIQUE NOT NULL
+			short_key VARCHAR(10) UNIQUE NOT NULL,
+			is_deleted BOOLEAN DEFAULT FALSE
 	);
 `)
 	if err != nil {
@@ -85,4 +97,55 @@ func (s *PostgresStorage) CheckConnection(ctx context.Context) error {
 	}
 
 	return nil
+}
+func (s *PostgresStorage) DeleteUserURLs(ctx context.Context, userID string, urls []string) {
+	var wg sync.WaitGroup
+	chunks := splitURLs(urls, 4)
+	errCh := make(chan error, len(chunks))
+	for _, batch := range chunks {
+		wg.Add(1)
+		go func(batch []string) {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				errCh <- ctx.Err()
+				return
+			default:
+				errCh <- s.updateDeleteUserURLs(userID, batch)
+			}
+		}(batch)
+	}
+	go func() {
+		wg.Wait()
+		close(errCh)
+	}()
+	for err := range errCh {
+		if err != nil {
+			log.Printf("Ошибка при удалении: %v", err)
+		}
+	}
+}
+func splitURLs(urls []string, n int) [][]string {
+	var chunks [][]string
+	chunkSize := (len(urls) + n - 1) / n
+
+	for i := 0; i < len(urls); i += chunkSize {
+		end := min(i+chunkSize, len(urls))
+		chunks = append(chunks, urls[i:end])
+	}
+
+	return chunks
+}
+func (s *PostgresStorage) updateDeleteUserURLs(userID string, batch []string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	query := "UPDATE short_urls SET is_deleted = true WHERE short_key = ANY($1) AND user_id = $2 AND is_deleted = false"
+	_, err = tx.Exec(query, pq.Array(batch), userID)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }

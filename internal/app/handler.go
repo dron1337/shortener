@@ -9,17 +9,18 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/dron1337/shortener/internal/auth"
 	"github.com/dron1337/shortener/internal/config"
-	"github.com/dron1337/shortener/internal/contextkeys"
+	"github.com/dron1337/shortener/internal/errors"
 	"github.com/dron1337/shortener/internal/service"
 	"github.com/dron1337/shortener/internal/store"
 	"github.com/gorilla/mux"
 )
 
 type URLHandler struct {
-	store  store.URLStorage
-	logger *log.Logger
-	config *config.Config
+	storages *Storages
+	logger   *log.Logger
+	config   *config.Config
 }
 type RequestData struct {
 	URL string `json:"url"`
@@ -39,73 +40,95 @@ type BatchResponseItem struct {
 	ShortURL      string `json:"short_url"`
 }
 
-func NewURLHandler(cfg *config.Config, urlStore store.URLStorage, logger *log.Logger) *URLHandler {
-	return &URLHandler{config: cfg, store: urlStore, logger: logger}
+func NewURLHandler(cfg *config.Config, storages *Storages, logger *log.Logger) *URLHandler {
+	return &URLHandler{config: cfg, storages: storages, logger: logger}
 }
 func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
 	h.logger.Printf("Incoming request: %s %s, Headers: %v", r.Method, r.URL, r.Header)
-	userID := r.Context().Value(contextkeys.UserIDKey).(string)
+	shortURL := ""
+	userID := r.Context().Value(auth.UserIDKey).(string)
+	w.Header().Set("Content-Type", "text/plain")
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
 	originalURL := strings.TrimSpace(string(body))
-	log.Printf("Original URL: %s", originalURL)
+	h.logger.Printf("Original URL: %s", originalURL)
 	if originalURL == "" {
-		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	if _, err := url.ParseRequestURI(originalURL); err != nil {
-		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortURL := h.store.GetShortKey(r.Context(), originalURL)
+	if h.storages.Postgres != nil {
+		shortURL = h.storages.Postgres.GetShortKey(r.Context(), originalURL)
+	}
+
+	if shortURL == "" && h.storages.FileStorage != nil {
+		shortURL = h.storages.FileStorage.GetShortKey(r.Context(), originalURL)
+	}
+
+	if shortURL == "" && h.storages.Memory != nil {
+		shortURL = h.storages.Memory.GetShortKey(r.Context(), originalURL)
+	}
 	status := http.StatusConflict
 	if shortURL == "" {
 		shortURL = service.GenerateShortKey()
-		err = h.store.Save(r.Context(), userID, originalURL, shortURL)
+		var saveErrors []error
+		if h.storages.Postgres != nil {
+			if err := h.storages.Postgres.Save(r.Context(), userID, originalURL, shortURL); err != nil {
+				saveErrors = append(saveErrors, fmt.Errorf("postgres save failed: %w", err))
+				h.logger.Printf("Postgres save error: %v", err)
+			}
+		}
+		if h.storages.FileStorage != nil {
+			if err := h.storages.FileStorage.Save(r.Context(), userID, originalURL, shortURL); err != nil {
+				saveErrors = append(saveErrors, fmt.Errorf("file save failed: %w", err))
+				h.logger.Printf("File storage save error: %v", err)
+			}
+		}
+		if h.storages.Memory != nil {
+			if err := h.storages.Memory.Save(r.Context(), userID, originalURL, shortURL); err != nil {
+				saveErrors = append(saveErrors, fmt.Errorf("memory save failed: %w", err))
+				h.logger.Printf("Memory storage save error: %v", err)
+			}
+		}
 		status = http.StatusCreated
-		if err != nil {
-			h.logger.Printf("Unexpected save error: %v", err)
-			w.Header().Set("Content-Type", "text/plain")
+		if len(saveErrors) > 0 {
 			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Failed to save URL to one or more storage backends"))
 			return
 		}
 	}
 	fullShortURL := fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL)
 	h.logger.Printf("Short URL: %s", fullShortURL)
-	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(status)
 	w.Write([]byte(fullShortURL))
 }
 func (h *URLHandler) GetUserURLs(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(contextkeys.UserIDKey).(string)
+	userID := r.Context().Value(auth.UserIDKey).(string)
 	h.logger.Printf("User ID из куки: %s", userID)
+	w.Header().Set("Content-Type", "application/json")
 	var urls []store.ResponseURLs
-	if composite, ok := h.store.(*store.CompositeStorage); ok {
-		for _, s := range composite.GetStorages() {
-			if pg, ok := s.(*store.InMemoryStorage); ok {
-				urls = pg.GetURLsByUser(r.Context(), userID, h.config.BaseURL)
-			}
-		}
+	if h.storages.Memory != nil {
+		urls = h.storages.Memory.GetURLsByUser(r.Context(), userID, h.config.BaseURL)
 	}
 	if len(urls) == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(urls)
 }
 func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(contextkeys.UserIDKey).(string)
+	userID := r.Context().Value(auth.UserIDKey).(string)
+	shortURL := ""
+	w.Header().Set("Content-Type", "application/json")
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -114,32 +137,54 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 	var data RequestData
 	if err := json.Unmarshal(body, &data); err != nil {
 		h.logger.Println("error parse json:", err)
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	h.logger.Println("URL:", data.URL)
 	if data.URL == "" {
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	if _, err := url.ParseRequestURI(data.URL); err != nil {
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortURL := h.store.GetShortKey(r.Context(), data.URL)
+	if h.storages.Postgres != nil {
+		shortURL = h.storages.Postgres.GetShortKey(r.Context(), data.URL)
+	}
+	if shortURL == "" && h.storages.FileStorage != nil {
+		shortURL = h.storages.FileStorage.GetShortKey(r.Context(), data.URL)
+	}
+	if shortURL == "" && h.storages.Memory != nil {
+		shortURL = h.storages.Memory.GetShortKey(r.Context(), data.URL)
+	}
 	status := http.StatusConflict
 	h.logger.Println("shortURL:", shortURL)
 	if shortURL == "" {
 		shortURL = service.GenerateShortKey()
-		err = h.store.Save(r.Context(), userID, data.URL, shortURL)
+		var saveErrors []error
+		if h.storages.Postgres != nil {
+			if err := h.storages.Postgres.Save(r.Context(), userID, data.URL, shortURL); err != nil {
+				saveErrors = append(saveErrors, fmt.Errorf("postgres save failed: %w", err))
+				h.logger.Printf("Postgres save error: %v", err)
+			}
+		}
+		if h.storages.FileStorage != nil {
+			if err := h.storages.FileStorage.Save(r.Context(), userID, data.URL, shortURL); err != nil {
+				saveErrors = append(saveErrors, fmt.Errorf("file save failed: %w", err))
+				h.logger.Printf("File storage save error: %v", err)
+			}
+		}
+		if h.storages.Memory != nil {
+			if err := h.storages.Memory.Save(r.Context(), userID, data.URL, shortURL); err != nil {
+				saveErrors = append(saveErrors, fmt.Errorf("memory save failed: %w", err))
+				h.logger.Printf("Memory storage save error: %v", err)
+			}
+		}
 		status = http.StatusCreated
-		if err != nil {
-			h.logger.Printf("Unexpected save error: %v", err)
-			w.Header().Set("Content-Type", "application/json")
+		if len(saveErrors) > 0 {
 			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Failed to save URL to one or more storage backends"))
 			return
 		}
 	}
@@ -147,7 +192,7 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 	response := ResponseData{Result: fullShortURL}
 	jsonBytes, err := json.Marshal(response)
 	if err != nil {
-		log.Println("error parse response json:", err)
+		h.logger.Println("error parse response json:", err)
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
@@ -157,19 +202,49 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 }
 func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 	h.logger.Printf("Request: %s %s", r.Method, r.URL.Path)
+	w.Header().Set("Content-Type", "text/plain")
 	vars := mux.Vars(r)
 	key := vars["key"]
 	if key == "" {
-		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	h.logger.Printf("Key: %s", key)
-	url, err := h.store.GetOriginalURL(r.Context(), key)
-	h.logger.Println(url)
-	if err != nil {
-		h.logger.Printf("Key not found: %s", key)
-		w.Header().Set("Content-Type", "text/plain")
+	var saveErrors []error
+	var url string
+	var found bool
+	if h.storages.Postgres != nil {
+		if u, err := h.storages.Postgres.GetOriginalURL(r.Context(), key); err != nil {
+			if err == errors.ErrURLDeleted {
+				h.logger.Printf("URL deleted in Postgres: %s", key)
+				w.WriteHeader(http.StatusGone)
+				return
+			}
+		} else {
+			url = u
+			found = true
+		}
+	}
+	if !found && h.storages.FileStorage != nil {
+		if u, err := h.storages.FileStorage.GetOriginalURL(r.Context(), key); err != nil {
+			saveErrors = append(saveErrors, fmt.Errorf("file get failed: %w", err))
+			h.logger.Printf("File storage get error: %v", err)
+		} else {
+			url = u
+			found = true
+		}
+	}
+	if !found && h.storages.Memory != nil {
+		if u, err := h.storages.Memory.GetOriginalURL(r.Context(), key); err != nil {
+			saveErrors = append(saveErrors, fmt.Errorf("memory get failed: %w", err))
+			h.logger.Printf("Memory storage get error: %v", err)
+		} else {
+			url = u
+			found = true
+		}
+	}
+	h.logger.Println("URL:", url)
+	if len(saveErrors) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -177,70 +252,38 @@ func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 func (h *URLHandler) CheckDBConnection(w http.ResponseWriter, r *http.Request) {
-	if pgStorage, ok := h.store.(*store.PostgresStorage); ok {
-		err := pgStorage.CheckConnection(r.Context())
-		if err != nil {
-			h.logger.Printf("Postgres connection check failed: %v", err)
-			w.Header().Set("Content-Type", "text/plain")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	} else if composite, ok := h.store.(*store.CompositeStorage); ok {
-		// Это композитное хранилище, ищем Postgres внутри
-		hasPostgres := false
-		for _, s := range composite.GetStorages() {
-			if pg, ok := s.(*store.PostgresStorage); ok {
-				hasPostgres = true
-				if err := pg.CheckConnection(r.Context()); err != nil {
-					w.Header().Set("Content-Type", "text/plain")
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-			}
-		}
-		if !hasPostgres {
-			w.Header().Set("Content-Type", "text/plain")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	} else {
-		w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", "text/plain")
+	if err := h.storages.Postgres.CheckConnection(r.Context()); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 func (h *URLHandler) GenerateBatchJSONURL(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(contextkeys.UserIDKey).(string)
-	// Декодирование тела запроса
+	userID := r.Context().Value(auth.UserIDKey).(string)
+	w.Header().Set("Content-Type", "application/json")
 	var batch BatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
 		h.logger.Println("Failed to decode batch request:", err)
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
-
-	// Проверка на пустой batch
 	if len(batch) == 0 {
-		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
 	var response BatchResponse
 	var shortURL string
 	status := http.StatusConflict
 	for _, item := range batch {
-		shortURL = h.store.GetShortKey(r.Context(), item.OriginalURL)
+		shortURL = h.storages.Postgres.GetShortKey(r.Context(), item.OriginalURL)
 		if shortURL == "" {
 			shortURL = service.GenerateShortKey()
-			err := h.store.Save(r.Context(), userID, item.OriginalURL, shortURL)
+			err := h.storages.Postgres.Save(r.Context(), userID, item.OriginalURL, shortURL)
 			status = http.StatusCreated
 			if err != nil {
 				h.logger.Printf("Unexpected save error: %v", err)
-				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -250,13 +293,27 @@ func (h *URLHandler) GenerateBatchJSONURL(w http.ResponseWriter, r *http.Request
 			ShortURL:      fmt.Sprintf("%s/%s", h.config.BaseURL, shortURL),
 		})
 	}
-
-	// Отправка ответа
-	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		h.logger.Printf("Failed to encode response: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
 	}
-
+}
+func (h *URLHandler) DeleteUserURLs(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(auth.UserIDKey).(string)
+	var urls []string
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewDecoder(r.Body).Decode(&urls); err != nil {
+		h.logger.Println("Failed to decode batch request:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	if len(urls) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	h.storages.Postgres.DeleteUserURLs(r.Context(), userID, urls)
+	w.WriteHeader(http.StatusAccepted)
 }

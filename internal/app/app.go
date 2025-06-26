@@ -18,7 +18,12 @@ type Server struct {
 	Logger     *log.Logger
 	HTTPServer *http.Server
 	Config     *config.Config
-	URLStore   store.URLStorage
+	Storages   *Storages
+}
+type Storages struct {
+	Postgres    *store.PostgresStorage
+	FileStorage *store.FileStorage
+	Memory      *store.InMemoryStorage
 }
 
 func (s *Server) Start() error {
@@ -59,9 +64,29 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-func NewServer(logger *log.Logger, cfg *config.Config, urlStore store.URLStorage) (*Server, error) {
-
-	mux := NewRouter(cfg, urlStore, logger)
+func NewServer(logger *log.Logger) (*Server, error) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		logger.Fatalf("Failed to load configuration: %v", err)
+		cfg = &config.Config{}
+	}
+	storages := Storages{Memory: store.NewInMemoryStorage()}
+	if cfg.FileName != "" {
+		storages.FileStorage = store.NewFileStorage(cfg.FileName)
+	}
+	if cfg.DBConnection != "" {
+		db, err := store.CreateDBConnection(cfg.DBConnection)
+		if err != nil {
+			logger.Printf("WARNING: DB storage disabled: %v", err)
+		} else {
+			if err := db.Ping(); err != nil {
+				logger.Printf("WARNING: DB connection failed: %v", err)
+			} else {
+				storages.Postgres = store.NewPostgresStorage(db)
+			}
+		}
+	}
+	mux := NewRouter(cfg, &storages, logger)
 
 	return &Server{
 		Logger: logger,
@@ -74,6 +99,6 @@ func NewServer(logger *log.Logger, cfg *config.Config, urlStore store.URLStorage
 			IdleTimeout:  15 * time.Second,
 		},
 		Config:   cfg,
-		URLStore: urlStore,
+		Storages:  &storages,
 	}, nil
 }
