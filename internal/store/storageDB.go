@@ -21,6 +21,7 @@ func NewPostgresStorage(db *sql.DB) *PostgresStorage {
 }
 
 func (s *PostgresStorage) Save(ctx context.Context, userID, originalURL, shortKey string) error {
+	fmt.Println("Save PostgresStorage")
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err

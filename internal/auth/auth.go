@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/securecookie"
 )
 
-type ContextKey string
+//type ContextKey string
 
 var (
 	hashKey  = securecookie.GenerateRandomKey(64)

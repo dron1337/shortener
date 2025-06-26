@@ -24,6 +24,7 @@ func NewInMemoryStorage() *InMemoryStorage {
 }
 
 func (s *InMemoryStorage) Save(ctx context.Context, userID, originalURL, shortKey string) error {
+	fmt.Println("Save InMemoryStorage")
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if user, exists := s.data[userID]; exists {

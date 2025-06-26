@@ -7,11 +7,10 @@ import (
 	"github.com/dron1337/shortener/internal/config"
 	"github.com/dron1337/shortener/internal/logger"
 	"github.com/dron1337/shortener/internal/service"
-	"github.com/dron1337/shortener/internal/store"
 	"github.com/gorilla/mux"
 )
 
-func NewRouter(cfg *config.Config, urlStore store.URLStorage, log *log.Logger) *mux.Router {
+func NewRouter(cfg *config.Config, storages *Storages, log *log.Logger) *mux.Router {
 	r := mux.NewRouter()
 
 	if err := logger.Initialize("info"); err != nil {
@@ -21,7 +20,7 @@ func NewRouter(cfg *config.Config, urlStore store.URLStorage, log *log.Logger) *
 	r.Use(logger.LoggingMiddleware)
 	r.Use(service.GzipHandle)
 	r.Use(auth.AuthMiddleware)
-	handler := NewURLHandler(cfg, urlStore, log)
+	handler := NewURLHandler(cfg, storages, log)
 	r.HandleFunc("/ping", handler.CheckDBConnection).Methods("GET")
 	r.HandleFunc("/{key}", handler.GetURL).Methods("GET")
 	r.HandleFunc("/api/user/urls", handler.GetUserURLs).Methods("GET")
