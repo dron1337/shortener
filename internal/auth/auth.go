@@ -5,12 +5,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/dron1337/shortener/internal/contextkeys"
 	"github.com/google/uuid"
 	"github.com/gorilla/securecookie"
 )
-
-//type ContextKey string
 
 var (
 	hashKey  = securecookie.GenerateRandomKey(64)
@@ -50,7 +47,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// 3. Добавляем userID в контекст запроса
-		ctx := context.WithValue(r.Context(), contextkeys.UserIDKey, userID)
+		ctx := context.WithValue(r.Context(), UserIDKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

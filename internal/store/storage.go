@@ -24,7 +24,6 @@ func NewInMemoryStorage() *InMemoryStorage {
 }
 
 func (s *InMemoryStorage) Save(ctx context.Context, userID, originalURL, shortKey string) error {
-	fmt.Println("Save InMemoryStorage")
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if user, exists := s.data[userID]; exists {
@@ -50,7 +49,6 @@ func (s *InMemoryStorage) GetShortKey(ctx context.Context, originalURL string) s
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, properties := range s.data {
-		fmt.Println(properties)
 		for key, val := range properties {
 			if val == originalURL {
 				return key
