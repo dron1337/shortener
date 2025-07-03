@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"syscall"
 	"time"
 
@@ -65,6 +66,13 @@ func (s *Server) Stop() error {
 }
 
 func NewServer(logger *log.Logger) (*Server, error) {
+	f, err := os.Create("profiles/base.pprof")
+
+	defer f.Close()
+
+	// Записываем текущее состояние памяти
+	pprof.WriteHeapProfile(f)
+
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		logger.Fatalf("Failed to load configuration: %v", err)
@@ -99,6 +107,6 @@ func NewServer(logger *log.Logger) (*Server, error) {
 			IdleTimeout:  15 * time.Second,
 		},
 		Config:   cfg,
-		Storages:  &storages,
+		Storages: &storages,
 	}, nil
 }
