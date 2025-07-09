@@ -19,6 +19,7 @@ var (
 	seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 	randMu     sync.Mutex
 )
+
 func GenerateShortKey() string {
 	randMu.Lock()
 	defer randMu.Unlock()

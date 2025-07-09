@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime/pprof"
+	//"runtime/pprof"
 	"syscall"
 	"time"
 
@@ -66,12 +66,12 @@ func (s *Server) Stop() error {
 }
 
 func NewServer(logger *log.Logger) (*Server, error) {
-	f, err := os.Create("profiles/base.pprof")
+	//f, err := os.Create("profiles/base.pprof")
 
-	defer f.Close()
+	//defer f.Close()
 
 	// Записываем текущее состояние памяти
-	pprof.WriteHeapProfile(f)
+	//pprof.WriteHeapProfile(f)
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
