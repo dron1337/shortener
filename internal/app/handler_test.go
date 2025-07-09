@@ -93,4 +93,5 @@ func TestGenerateURLHandler_RealStorage(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, rr2.Code)
 		assert.Contains(t, rr2.Body.String(), cfg.BaseURL)
 	})
+
 }

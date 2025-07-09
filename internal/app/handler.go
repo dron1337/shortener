@@ -44,7 +44,7 @@ func NewURLHandler(cfg *config.Config, storages *Storages, logger *log.Logger) *
 	return &URLHandler{config: cfg, storages: storages, logger: logger}
 }
 func (h *URLHandler) GenerateURL(w http.ResponseWriter, r *http.Request) {
-	h.logger.Printf("Incoming request: %s %s, Headers: %v", r.Method, r.URL, r.Header)
+	//h.logger.Printf("Incoming request: %s %s, Headers: %v", r.Method, r.URL, r.Header)
 	shortURL := ""
 	userID := r.Context().Value(auth.UserIDKey).(string)
 	w.Header().Set("Content-Type", "text/plain")
@@ -201,7 +201,7 @@ func (h *URLHandler) GenerateJSONURL(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonBytes)
 }
 func (h *URLHandler) GetURL(w http.ResponseWriter, r *http.Request) {
-	h.logger.Printf("Request: %s %s", r.Method, r.URL.Path)
+	//h.logger.Printf("Request: %s %s", r.Method, r.URL.Path)
 	w.Header().Set("Content-Type", "text/plain")
 	vars := mux.Vars(r)
 	key := vars["key"]
